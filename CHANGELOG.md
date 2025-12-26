@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.1] - 2025-12-26
+
+- Updated README with instructions for changing sail color.
+
 ## [1.0.0] - 2025-12-25
 
 Initial Release of Valheim Boat Customizer.
