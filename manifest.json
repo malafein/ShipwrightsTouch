@@ -1,0 +1,9 @@
+{
+    "name": "ShipwrightsTouch",
+    "version_number": "1.0.0",
+    "website_url": "https://github.com/malafein/ShipwrightsTouch",
+    "description": "Custom boat naming and sail coloring for Valheim.",
+    "dependencies": [
+        "denikson-BepInExPack_Valheim-5.4.2100"
+    ]
+}
