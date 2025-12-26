@@ -6,7 +6,7 @@ A Valheim mod that lets you name your ships and customize sail colors.
 
 - **Ship Naming:** Rename your ships using `Shift + E` while looking at the rudder, seats, mast, or hull.
 - **Dynamic Hover Text:** The ship's custom name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
-- **Sail Coloring:** Customize your ship's sail style during construction or modification (if supported by other mods).
+- **Sail Coloring:** Customize your ship's sail style during construction or modification (if supported by other mods). Press `G` while building a ship with your Hammer.
 - **Mod Compatibility:** Specifically designed to work alongside popular mods like `QuickStackStore`. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
 - **Server Sync:** Names and colors are stored in the ship's ZDO and synchronized across the server.
 
