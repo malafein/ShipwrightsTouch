@@ -4,7 +4,7 @@
     <TargetFramework>net462</TargetFramework>
     <AssemblyName>ShipwrightsTouch</AssemblyName>
     <Description>Extra features for Valheim boats: naming and sail coloring.</Description>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <RestoreAdditionalProjectSources>
@@ -21,15 +21,15 @@
   <ItemGroup>
     <!-- You will need to update these paths to point to your Valheim managed folder -->
     <Reference Include="assembly_valheim">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/Valheim_Data/Managed/assembly_valheim.dll</HintPath>
+      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_valheim.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="assembly_guiutils">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/Valheim_Data/Managed/assembly_guiutils.dll</HintPath>
+      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_guiutils.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="assembly_utils">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/Valheim_Data/Managed/assembly_utils.dll</HintPath>
+      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_utils.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

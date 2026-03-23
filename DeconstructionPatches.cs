@@ -23,6 +23,8 @@ namespace ValheimBoatCustomizer
                 return;
             }
 
+            if (!Plugin.CanModifyShip(ship, out _)) return;
+
             if (!piece.m_canBeRemoved)
             {
                 piece.m_canBeRemoved = true;
@@ -47,6 +49,12 @@ namespace ValheimBoatCustomizer
 
             Piece shipPiece = ship.GetComponent<Piece>();
             if (shipPiece == null) return true;
+
+            if (!Plugin.CanModifyShip(ship, out string ownerName))
+            {
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can deconstruct this ship.");
+                return false;
+            }
 
             if (!shipPiece.m_canBeRemoved)
             {

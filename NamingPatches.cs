@@ -6,9 +6,8 @@ namespace ValheimBoatCustomizer
     [HarmonyPatch]
     public static class NamingPatches
     {
-        private const string ZdoNameKey = "custom_ship_name";
 
-        private static Ship GetParentShip(Component component)
+        public static Ship GetParentShip(Component component)
         {
             if (component == null) return null;
             if (component is Ship ship) return ship;
@@ -26,7 +25,7 @@ namespace ValheimBoatCustomizer
             return null;
         }
 
-        private static string GetRenameTitle()
+        internal static string GetRenameTitle()
         {
             try
             {
@@ -38,69 +37,7 @@ namespace ValheimBoatCustomizer
             catch { return "Rename Ship"; }
         }
 
-        [HarmonyPatch(typeof(HoverText), "GetHoverText")]
-        [HarmonyPostfix]
-        [HarmonyPriority(Priority.VeryLow)]
-        private static void Postfix_HoverText(HoverText __instance, ref string __result)
-        {
-            ApplyNamingHover(__instance, ref __result);
-        }
 
-        [HarmonyPatch(typeof(ShipControlls), "GetHoverText")]
-        [HarmonyPostfix]
-        [HarmonyPriority(Priority.VeryLow)]
-        private static void Postfix_RudderHoverText(ShipControlls __instance, ref string __result)
-        {
-            ApplyNamingHover(__instance, ref __result);
-        }
-
-        [HarmonyPatch(typeof(Container), "GetHoverText")]
-        [HarmonyPostfix]
-        [HarmonyPriority(Priority.VeryLow)]
-        private static void Postfix_ContainerHoverText(Container __instance, ref string __result)
-        {
-            ApplyNamingHover(__instance, ref __result);
-        }
-
-        // Seats/Stools use Chair component
-        [HarmonyPatch(typeof(Chair), "GetHoverText")]
-        [HarmonyPostfix]
-        [HarmonyPriority(Priority.VeryLow)]
-        private static void Postfix_ChairHoverText(Chair __instance, ref string __result)
-        {
-            ApplyNamingHover(__instance, ref __result);
-        }
-
-        private static void ApplyNamingHover(Component instance, ref string result)
-        {
-            Ship ship = GetParentShip(instance);
-            if (ship == null) return;
-
-            ZNetView nview = ship.GetComponent<ZNetView>();
-            if (nview == null || !nview.IsValid()) return;
-
-            string shipName = nview.GetZDO().GetString(ZdoNameKey);
-            
-            if (!string.IsNullOrEmpty(shipName))
-            {
-                string header = $"<color=yellow>{shipName}</color>";
-                // Always prepend as first line if not already there
-                if (result == null || !result.StartsWith(header))
-                {
-                    result = string.IsNullOrEmpty(result) ? header : (header + "\n" + result);
-                }
-            }
-
-            // Add naming prompt ONLY to non-container ship parts to avoid interaction conflicts
-            if (!(instance is Container))
-            {
-                string prompt = $"[<color=yellow><b>Shift + E</b></color>] {GetRenameTitle()}";
-                if (result != null && !result.Contains("Shift + E"))
-                {
-                    result += "\n" + prompt;
-                }
-            }
-        }
 
         [HarmonyPatch(typeof(Player), "Interact")]
         [HarmonyPrefix]
@@ -116,7 +53,14 @@ namespace ValheimBoatCustomizer
                 Ship ship = GetParentShip(go.GetComponent<Component>());
                 if (ship != null)
                 {
-                    TextInput.instance.RequestText(new ShipNameTextReceiver(ship), GetRenameTitle(), 20);
+                    if (Plugin.CanModifyShip(ship, out string ownerName))
+                    {
+                        TextInput.instance.RequestText(new ShipNameTextReceiver(ship), GetRenameTitle(), 20);
+                    }
+                    else
+                    {
+                        MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can rename this ship.");
+                    }
                     return false; // Intercept vanilla rudder/seat interaction
                 }
             }
@@ -143,7 +87,14 @@ namespace ValheimBoatCustomizer
                     Ship ship = GetParentShip(hoverGO.GetComponent<Component>());
                     if (ship != null)
                     {
-                        TextInput.instance.RequestText(new ShipNameTextReceiver(ship), GetRenameTitle(), 20);
+                        if (Plugin.CanModifyShip(ship, out string ownerName))
+                        {
+                            TextInput.instance.RequestText(new ShipNameTextReceiver(ship), GetRenameTitle(), 20);
+                        }
+                        else
+                        {
+                            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can rename this ship.");
+                        }
                     }
                 }
             }
@@ -157,7 +108,7 @@ namespace ValheimBoatCustomizer
             public string GetText()
             {
                 ZNetView nview = m_ship.GetComponent<ZNetView>();
-                return (nview != null && nview.IsValid()) ? nview.GetZDO().GetString(ZdoNameKey) : "";
+                return (nview != null && nview.IsValid()) ? nview.GetZDO().GetString(Plugin.ZdoNameKey) : "";
             }
 
             public void SetText(string text)
@@ -165,7 +116,7 @@ namespace ValheimBoatCustomizer
                 ZNetView nview = m_ship.GetComponent<ZNetView>();
                 if (nview != null && nview.IsValid())
                 {
-                    nview.GetZDO().Set(ZdoNameKey, text);
+                    nview.GetZDO().Set(Plugin.ZdoNameKey, text);
                 }
                 // No synchronization to container ZDOs to avoid conflicts/duplication.
                 // Hover header is handled dynamically in ApplyNamingHover via ship lookup.

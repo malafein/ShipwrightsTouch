@@ -7,7 +7,6 @@ namespace ValheimBoatCustomizer
     [HarmonyPatch]
     public static class ColoringPatches
     {
-        private const string ZdoStyleKey = "custom_sail_style";
         private static int m_selectedStyle = 0;
         private const int MaxStyles = 6; 
 
@@ -84,7 +83,13 @@ namespace ValheimBoatCustomizer
             if (m_isPlacing && nview.IsOwner())
             {
                 ZLog.LogWarning($"[ValheimBoatMod] Setting initial sail style {m_selectedStyle} for new ship: {__instance.gameObject.name}");
-                nview.GetZDO().Set(ZdoStyleKey, m_selectedStyle);
+                nview.GetZDO().Set(Plugin.ZdoStyleKey, m_selectedStyle);
+
+                if (Plugin.AssignBuilderIdentity.Value && Player.m_localPlayer != null)
+                {
+                    nview.GetZDO().Set(Plugin.ZdoOwnerIdKey, Player.m_localPlayer.GetPlayerID());
+                    nview.GetZDO().Set(Plugin.ZdoOwnerNameKey, Player.m_localPlayer.GetPlayerName());
+                }
             }
 
             UpdateSailAppearance(__instance);
@@ -102,7 +107,7 @@ namespace ValheimBoatCustomizer
             ZNetView nview = ship.GetComponent<ZNetView>();
             if (nview == null || !nview.IsValid()) return;
 
-            int style = nview.GetZDO().GetInt(ZdoStyleKey, 0);
+            int style = nview.GetZDO().GetInt(Plugin.ZdoStyleKey, 0);
             ApplyStyle(ship, style);
         }
 
@@ -145,6 +150,42 @@ namespace ValheimBoatCustomizer
         private static void Postfix_UpdateSailSize(Ship __instance) 
         { 
             UpdateSailAppearance(__instance); 
+        }
+
+        [HarmonyPatch(typeof(Player), "Update")]
+        [HarmonyPostfix]
+        private static void Postfix_PlayerUpdate(Player __instance)
+        {
+            if (__instance != Player.m_localPlayer || TextInput.IsVisible()) return;
+
+            if (Input.GetKeyDown(KeyCode.G) && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)))
+            {
+                GameObject hoverGO = __instance.GetHoverObject();
+                if (hoverGO == null) return;
+
+                if (hoverGO.GetComponentInParent<Container>() != null) return;
+
+                Ship ship = NamingPatches.GetParentShip(hoverGO.GetComponent<Component>());
+                if (ship != null)
+                {
+                    if (Plugin.CanModifyShip(ship, out string ownerName))
+                    {
+                        ZNetView nview = ship.GetComponent<ZNetView>();
+                        if (nview != null && nview.IsValid())
+                        {
+                            int currentStyle = nview.GetZDO().GetInt(Plugin.ZdoStyleKey, 0);
+                            int nextStyle = (currentStyle + 1) % MaxStyles;
+                            nview.GetZDO().Set(Plugin.ZdoStyleKey, nextStyle);
+                            UpdateSailAppearance(ship);
+                            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[nextStyle]}</color>");
+                        }
+                    }
+                    else
+                    {
+                        MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can change this ship's sail color.");
+                    }
+                }
+            }
         }
     }
 }

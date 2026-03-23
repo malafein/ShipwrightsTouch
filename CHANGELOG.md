@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.2] - 2026-03-22
+
+### Features
+- **Sail Coloring on Existing Ships:** You can now change the sail color of an existing ship using `Shift + G`.
+- **Builder Identity & Restrictions:** The mod now optionally (enabled by default) tracks who built a ship. If tracking is enabled, only the owner can deconstruct, rename, or recolor the ship. The owner's name is also displayed on the ship's HoverText.
+
 ## [1.0.1] - 2025-12-26
 
 - Updated README with instructions for changing sail color.
