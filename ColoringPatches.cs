@@ -82,7 +82,7 @@ namespace ValheimBoatCustomizer
 
             if (m_isPlacing && nview.IsOwner())
             {
-                ZLog.LogWarning($"[ValheimBoatMod] Setting initial sail style {m_selectedStyle} for new ship: {__instance.gameObject.name}");
+                ZLog.LogWarning($"[ShipwrightsTouch] Setting initial sail style {m_selectedStyle} for new ship: {__instance.gameObject.name}");
                 nview.GetZDO().Set(Plugin.ZdoStyleKey, m_selectedStyle);
 
                 if (Plugin.AssignBuilderIdentity.Value && Player.m_localPlayer != null)
@@ -134,7 +134,7 @@ namespace ValheimBoatCustomizer
             
             if (count > 0)
             {
-                // ZLog.LogWarning($"[ValheimBoatMod] Applied style {style} to {count} renderers on {ship.gameObject.name}");
+                // ZLog.LogWarning($"[ShipwrightsTouch] Applied style {style} to {count} renderers on {ship.gameObject.name}");
             }
         }
 
