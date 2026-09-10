@@ -45,8 +45,8 @@ namespace ValheimBoatCustomizer
             // Apply selected style to ghost immediately
             ApplyStyle(ship, m_selectedStyle);
 
-            // Change style with 'G' key - Only if taking input
-            if (takeInput && Input.GetKeyDown(KeyCode.G))
+            // Cycle the style with the configured key, only while taking input
+            if (takeInput && Keybinds.IsDown(Plugin.SailColorPlacingKey.Value))
             {
                 m_selectedStyle = (m_selectedStyle + 1) % MaxStyles;
                 MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[m_selectedStyle]}</color>");
@@ -157,34 +157,31 @@ namespace ValheimBoatCustomizer
         private static void Postfix_PlayerUpdate(Player __instance)
         {
             if (__instance != Player.m_localPlayer || TextInput.IsVisible()) return;
+            if (!Keybinds.IsDown(Plugin.SailColorShipKey.Value) || !Keybinds.CanTakeInput(__instance)) return;
 
-            if (Input.GetKeyDown(KeyCode.G) && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)))
+            GameObject hoverGO = __instance.GetHoverObject();
+            if (hoverGO == null) return;
+
+            if (hoverGO.GetComponentInParent<Container>() != null) return;
+
+            Ship ship = NamingPatches.GetParentShip(hoverGO.GetComponent<Component>());
+            if (ship == null) return;
+
+            if (Plugin.CanModifyShip(ship, out string ownerName))
             {
-                GameObject hoverGO = __instance.GetHoverObject();
-                if (hoverGO == null) return;
-
-                if (hoverGO.GetComponentInParent<Container>() != null) return;
-
-                Ship ship = NamingPatches.GetParentShip(hoverGO.GetComponent<Component>());
-                if (ship != null)
+                ZNetView nview = ship.GetComponent<ZNetView>();
+                if (nview != null && nview.IsValid())
                 {
-                    if (Plugin.CanModifyShip(ship, out string ownerName))
-                    {
-                        ZNetView nview = ship.GetComponent<ZNetView>();
-                        if (nview != null && nview.IsValid())
-                        {
-                            int currentStyle = nview.GetZDO().GetInt(Plugin.ZdoStyleKey, 0);
-                            int nextStyle = (currentStyle + 1) % MaxStyles;
-                            nview.GetZDO().Set(Plugin.ZdoStyleKey, nextStyle);
-                            UpdateSailAppearance(ship);
-                            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[nextStyle]}</color>");
-                        }
-                    }
-                    else
-                    {
-                        MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can change this ship's sail color.");
-                    }
+                    int currentStyle = nview.GetZDO().GetInt(Plugin.ZdoStyleKey, 0);
+                    int nextStyle = (currentStyle + 1) % MaxStyles;
+                    nview.GetZDO().Set(Plugin.ZdoStyleKey, nextStyle);
+                    UpdateSailAppearance(ship);
+                    MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[nextStyle]}</color>");
                 }
+            }
+            else
+            {
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can change this ship's sail color.");
             }
         }
     }

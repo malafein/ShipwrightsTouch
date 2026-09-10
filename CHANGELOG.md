@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0] - 2026-09-10
+
+- Updated for the Valheim 1.0 release, which moved the game to Unity 6. Version 1.0.2 of this mod does not work with Valheim 1.0, so updating is required.
+
+### Changes
+- **New Sail Color Keys:** Valheim 1.0 uses `G` for its new radial menu, so sail coloring has moved. Use `Alt + E` while looking at an existing ship, or `E` while placing a ship. Renaming is unchanged (`Shift + E`).
+- **Configurable Keybindings:** Renaming and both sail color actions can now be rebound in the new `Controls` section of the config. The hover text always shows the keys you have set.
+- **Keybinding Conflict Warning:** If one of these keybindings is also bound to a game action, a warning is written to the log.
+
+### Fixes
+- Typing a capital `E` in chat while looking at a ship's hull or mast no longer opens the rename box.
+
 ## [1.0.2] - 2026-03-22
 
 ### Features

@@ -1,0 +1,91 @@
+[size=5][b]Shipwright's Touch[/b][/size]
+
+A Valheim mod that lets you name your ships and customize sail colors.
+
+[line]
+
+[size=4][b]Features[/b][/size]
+
+[list]
+[*][b]Ship Naming:[/b] Rename your ships using [b]Shift + E[/b] while looking at the rudder, seats, mast, or hull.
+[*][b]Dynamic Hover Text:[/b] The ship's custom name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
+[*][b]Sail Coloring:[/b] Customize your ship's sail color during construction or afterwards. Press [b]E[/b] while placing a ship with your Hammer, or [b]Alt + E[/b] while looking at an existing ship.
+[*][b]Configurable Keybindings:[/b] Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
+[*][b]Builder Identity & Restrictions:[/b] When a ship is constructed, the builder's identity is recorded. Only the builder (owner) can rename, recolor, or deconstruct the ship. The owner's name is displayed in the hover text.
+[*][b]Mod Compatibility:[/b] Specifically designed to work alongside popular mods like QuickStackStore. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
+[*][b]Server Sync:[/b] Names, colors, and owners are stored in the ship's ZDO and synchronized across the server.
+[/list]
+
+[line]
+
+[size=4][b]Installation[/b][/size]
+
+[size=3][b]Nexus Mods / Vortex[/b][/size]
+[list]
+[*]Install via Vortex Mod Manager.
+[*]-or- Download the mod from the Files tab above, and follow the Manual Installation instructions below.
+[/list]
+
+[size=3][b]Thunderstore / r2modman (Recommended)[/b][/size]
+[list]
+[*]Install via Thunderstore Mod Manager or r2modman.
+[*]-or- Download the mod from [url=https://thunderstore.io/c/valheim/p/malafein/ShipwrightsTouch/]Thunderstore[/url], and follow the Manual Installation instructions below.
+[/list]
+
+[size=3][b]Manual Installation[/b][/size]
+[list=1]
+[*]Install [url=https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/]BepInExPack Valheim[/url].
+[*]Download the latest release of Shipwright's Touch from [url=https://github.com/malafein/ShipwrightsTouch/releases]GitHub[/url].
+[*]Extract the ShipwrightsTouch.dll file into your Valheim install folder, under BepInEx\plugins.
+[/list]
+
+[quote][b]Compatibility:[/b] version 1.1.0 and later require Valheim 1.0 or newer. Use 1.0.2 for earlier game versions.[/quote]
+
+[line]
+
+[size=4][b]Configuration[/b][/size]
+
+The mod generates a configuration file at BepInEx/config/com.malafein.shipwrightstouch.cfg after the first run. Settings can also be changed in-game with a configuration manager such as [url=https://github.com/shudnal/ConfigurationManager]shudnal's Configuration Manager[/url].
+
+[size=3][b]General[/b][/size]
+[list]
+[*][b]AssignBuilderIdentity:[/b] Set to true (default) to assign your character as the owner when constructing a ship, restricting modifications to yourself.
+[*][b]AllowShipDeconstruction:[/b] Set to true to allow removing ships with the hammer tool.
+[/list]
+
+[size=3][b]Controls[/b][/size]
+[list]
+[*][b]RenameShip:[/b] Rename the ship you are looking at. Default [b]Shift + E[/b].
+[*][b]ChangeSailColor:[/b] Cycle the sail color of the ship you are looking at. Default [b]Alt + E[/b].
+[*][b]ChangeSailColorWhilePlacing:[/b] Cycle the sail color while placing a ship with the Hammer. Default [b]E[/b].
+[/list]
+
+Either the left or right Shift, Ctrl, or Alt key satisfies a modifier. Plain [b]E[/b] still works as normal on a ship: it takes the helm or sits you down.
+
+If one of these keybindings is also bound to a game action, a warning is written to the BepInEx log (LogOutput.log) at startup and whenever a binding changes.
+
+[line]
+
+[size=4][b]Technical Details[/b][/size]
+
+[list]
+[*]Uses Harmony for patching Player, Ship, Container, Chair, ShipControlls, HoverText, and ZInput.
+[*]Custom data is stored in ZDO keys: custom_ship_name, custom_sail_style, shipwrightstouch.builder_id, and shipwrightstouch.builder_name.
+[*]Interaction logic is precisely focused to avoid conflict with container-specific mods.
+[/list]
+
+[size=4][b]License & Development[/b][/size]
+
+This project is licensed under the [b]GNU General Public License v3.0 (GPLv3)[/b]. You are free to modify and redistribute this mod under the same license terms.
+
+[b]Development Note:[/b] This mod was primarily developed with the assistance of [b]Google Antigravity[/b], [b]Gemini[/b], and [b]Claude[/b]. The source code is open to the community to learn from, modify, and improve.
+
+[line]
+
+[size=4][b]Changelog[/b][/size]
+
+See the [url=https://github.com/malafein/ShipwrightsTouch/blob/main/CHANGELOG.md]changelog on GitHub[/url].
+
+[size=4][b]Bugs & Known Issues[/b][/size]
+
+Feel free to log any issues you encounter while using this mod on [url=https://github.com/malafein/ShipwrightsTouch/issues]GitHub[/url].

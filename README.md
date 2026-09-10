@@ -6,7 +6,8 @@ A Valheim mod that lets you name your ships and customize sail colors.
 
 - **Ship Naming:** Rename your ships using `Shift + E` while looking at the rudder, seats, mast, or hull.
 - **Dynamic Hover Text:** The ship's custom name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
-- **Sail Coloring:** Customize your ship's sail style during construction or modification. Press `G` while placing a ship with your Hammer, or `Shift + G` on an existing ship.
+- **Sail Coloring:** Customize your ship's sail color during construction or afterwards. Press `E` while placing a ship with your Hammer, or `Alt + E` while looking at an existing ship.
+- **Configurable Keybindings:** Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
 - **Builder Identity & Restrictions:** When a ship is constructed, the builder's identity is recorded. Only the builder (owner) can rename, recolor, or deconstruct the ship. The owner's name is displayed in the hover text.
 - **Mod Compatibility:** Specifically designed to work alongside popular mods like `QuickStackStore`. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
 - **Server Sync:** Names, colors, and owners are stored in the ship's ZDO and synchronized across the server.
@@ -25,19 +26,31 @@ A Valheim mod that lets you name your ships and customize sail colors.
 
 ### Manual Installation
 1. Install [BepInExPack Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/).
-2. Download the latest release of Shipwright's Touch.
+2. Download the latest release of Shipwright's Touch from [GitHub](https://github.com/malafein/ShipwrightsTouch/releases).
 3. Extract the `ShipwrightsTouch.dll` file into your `<Valheim Install Folder>\BepInEx\plugins` directory.
+
+> **Compatibility**: version 1.1.0 and later require Valheim 1.0 or newer. Use 1.0.2 for earlier game versions.
 
 ## Configuration
 
-The mod generates a configuration file at `BepInEx/config/com.malafein.shipwrightstouch.cfg` after the first run.
+The mod generates a configuration file at `BepInEx/config/com.malafein.shipwrightstouch.cfg` after the first run. Settings can also be changed in-game with a configuration manager such as [shudnal's Configuration Manager](https://github.com/shudnal/ConfigurationManager).
 
+### General
 - **AssignBuilderIdentity:** Set to `true` (default) to assign your character as the owner when constructing a ship, restricting modifications to yourself.
 - **AllowShipDeconstruction:** Set to `true` to allow removing ships with the hammer tool.
 
+### Controls
+- **RenameShip:** Rename the ship you are looking at. Default `Shift + E`.
+- **ChangeSailColor:** Cycle the sail color of the ship you are looking at. Default `Alt + E`.
+- **ChangeSailColorWhilePlacing:** Cycle the sail color while placing a ship with the Hammer. Default `E`.
+
+Either the left or right Shift, Ctrl, or Alt key satisfies a modifier. Plain `E` still works as normal on a ship: it takes the helm or sits you down.
+
+If one of these keybindings is also bound to a game action, a warning is written to the BepInEx log (`LogOutput.log`) at startup and whenever a binding changes.
+
 ## Technical Details
 
-- Uses Harmony for patching `Player`, `Ship`, `Container`, and `HoverText`.
+- Uses Harmony for patching `Player`, `Ship`, `Container`, `Chair`, `ShipControlls`, `HoverText`, and `ZInput`.
 - Custom data is stored in ZDO keys: `custom_ship_name`, `custom_sail_style`, `shipwrightstouch.builder_id`, and `shipwrightstouch.builder_name`.
 - Interaction logic is precisely focused to avoid conflict with container-specific mods.
 
