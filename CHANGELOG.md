@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.1] - 2026-09-10
+
+- Corrected documentation.
+
 ## [1.1.0] - 2026-09-10
 
 - Updated for the Valheim 1.0 release, which moved the game to Unity 6. Version 1.0.2 of this mod does not work with Valheim 1.0, so updating is required.

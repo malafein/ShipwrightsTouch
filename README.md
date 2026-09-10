@@ -29,7 +29,7 @@ A Valheim mod that lets you name your ships and customize sail colors.
 2. Download the latest release of Shipwright's Touch from [GitHub](https://github.com/malafein/ShipwrightsTouch/releases).
 3. Extract the `ShipwrightsTouch.dll` file into your `<Valheim Install Folder>\BepInEx\plugins` directory.
 
-> **Compatibility**: version 1.1.0 and later require Valheim 1.0 or newer. Use 1.0.2 for earlier game versions.
+> **Compatibility**: tested with Valheim 1.0.
 
 ## Configuration
 

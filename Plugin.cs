@@ -10,7 +10,7 @@ namespace ValheimBoatCustomizer
     {
         public const string ModGUID = "com.malafein.shipwrightstouch";
         public const string ModName = "Shipwright's Touch";
-        public const string ModVersion = "1.1.0";
+        public const string ModVersion = "1.1.1";
         
         public const string ZdoOwnerIdKey = "shipwrightstouch.builder_id";
         public const string ZdoOwnerNameKey = "shipwrightstouch.builder_name";

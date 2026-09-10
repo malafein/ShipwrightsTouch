@@ -8,8 +8,10 @@ using UnityEngine;
 
 namespace ValheimBoatCustomizer
 {
-    // Valheim 1.0 runs on Unity 6's Input System, so legacy UnityEngine.Input and BepInEx's
-    // KeyboardShortcut.IsDown() no longer see key presses. Shortcuts are read through ZInput.
+    // Shortcuts are read through ZInput, Valheim's own input layer, which Valheim 1.0 builds
+    // on Unity 6's Input System. BepInEx's KeyboardShortcut.IsDown() also still works (it
+    // falls back to the Input System when legacy input is unavailable), but ZInput keeps key
+    // handling on the same mapping the game uses, which the conflict check below relies on.
     [HarmonyPatch]
     public static class Keybinds
     {
