@@ -1,4 +1,5 @@
 using HarmonyLib;
+using malafein.Valheim.Shared;
 using UnityEngine;
 
 namespace ValheimBoatCustomizer

@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using malafein.Valheim.Shared;
 using UnityEngine;
 
 namespace ValheimBoatCustomizer
@@ -27,6 +28,8 @@ namespace ValheimBoatCustomizer
 
         private void Awake()
         {
+            Log.Init(Logger);
+
             AllowShipDeconstruction = Config.Bind("General", "AllowShipDeconstruction", false, "Allow deconstructing ships with the hammer (middle-mouse button).");
             AssignBuilderIdentity = Config.Bind("General", "AssignBuilderIdentity", true, "Automatically assign your character as the owner when constructing a ship, restricting modifications (renaming, recoloring, deconstruction) to yourself.");
 
@@ -34,14 +37,14 @@ namespace ValheimBoatCustomizer
                 "Controls",
                 "RenameShip",
                 new KeyboardShortcut(KeyCode.E, KeyCode.LeftShift),
-                "Rename the ship you are looking at (rudder, seats, mast, or hull). Either Shift, Ctrl, or Alt key satisfies a modifier."
+                "Rename the ship you are looking at (rudder, seats, mast, or hull)."
             );
 
             SailColorShipKey = Config.Bind(
                 "Controls",
                 "ChangeSailColor",
                 new KeyboardShortcut(KeyCode.E, KeyCode.LeftAlt),
-                "Cycle the sail color of the ship you are looking at. Either Shift, Ctrl, or Alt key satisfies a modifier."
+                "Cycle the sail color of the ship you are looking at."
             );
 
             SailColorPlacingKey = Config.Bind(
@@ -51,10 +54,17 @@ namespace ValheimBoatCustomizer
                 "Cycle the sail color of a ship while placing it with the hammer."
             );
 
-            RenameShipKey.SettingChanged += OnKeybindChanged;
-            SailColorShipKey.SettingChanged += OnKeybindChanged;
-            SailColorPlacingKey.SettingChanged += OnKeybindChanged;
-            
+            // "Use" is cancelled by NamingPatches.Prefix_PlayerInteract over ship parts and has
+            // nothing to interact with while placing. TabLeft/TabRight only act inside tabbed
+            // menus, where Player.TakeInput() is false and none of our shortcuts run.
+            Keybinds.Init(Config, "Use", "TabLeft", "TabRight");
+            Keybinds.Add(RenameShipKey);
+            Keybinds.Add(SailColorShipKey);
+
+            // Only active while placing a ship, so it can't collide with the other two.
+            Keybinds.Add(SailColorPlacingKey, "Placing");
+
+
             Logger.LogInfo($"{ModName} {ModVersion} is loading...");
             try 
             {
@@ -66,14 +76,6 @@ namespace ValheimBoatCustomizer
                 Logger.LogError($"{ModName} failed to apply some patches: {e}");
             }
             Logger.LogInfo($"{ModName} loaded!");
-
-            // No-op until ZInput exists; the ZInput.Load postfix covers the normal startup order.
-            Keybinds.CheckConflicts();
-        }
-
-        private static void OnKeybindChanged(object sender, System.EventArgs e)
-        {
-            Keybinds.CheckConflicts();
         }
 
         public static bool CanModifyShip(Ship ship, out string ownerName)

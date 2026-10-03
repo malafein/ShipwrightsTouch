@@ -1,5 +1,6 @@
 using BepInEx.Configuration;
 using HarmonyLib;
+using malafein.Valheim.Shared;
 using UnityEngine;
 
 namespace ValheimBoatCustomizer
@@ -67,8 +68,8 @@ namespace ValheimBoatCustomizer
                 bool canModify = Plugin.CanModifyShip(ship, out _);
                 if (canModify)
                 {
-                    AppendPrompt(ref result, Plugin.RenameShipKey.Value, NamingPatches.GetRenameTitle());
-                    AppendPrompt(ref result, Plugin.SailColorShipKey.Value, "Change Sail Color");
+                    AppendPrompt(ref result, Plugin.RenameShipKey, NamingPatches.GetRenameTitle());
+                    AppendPrompt(ref result, Plugin.SailColorShipKey, "Change Sail Color");
                 }
 
                 if (!string.IsNullOrEmpty(builderName))
@@ -83,8 +84,9 @@ namespace ValheimBoatCustomizer
         }
 
         // Prompts show the configured shortcut, and are omitted when the shortcut is unbound.
-        private static void AppendPrompt(ref string result, KeyboardShortcut shortcut, string label)
+        private static void AppendPrompt(ref string result, ConfigEntry<KeyboardShortcut> entry, string label)
         {
+            KeyboardShortcut shortcut = entry.Value;
             if (result == null || shortcut.MainKey == KeyCode.None) return;
 
             string prompt = $"[<color=yellow><b>{Keybinds.Format(shortcut)}</b></color>] {label}";

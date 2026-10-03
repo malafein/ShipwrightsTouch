@@ -4,9 +4,9 @@ A Valheim mod that lets you name your ships and customize sail colors.
 
 ## Features
 
-- **Ship Naming:** Rename your ships using `Shift + E` while looking at the rudder, seats, mast, or hull.
+- **Ship Naming:** Rename your ships using `Left Shift + E` while looking at the rudder, seats, mast, or hull.
 - **Dynamic Hover Text:** The ship's custom name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
-- **Sail Coloring:** Customize your ship's sail color during construction or afterwards. Press `E` while placing a ship with your Hammer, or `Alt + E` while looking at an existing ship.
+- **Sail Coloring:** Customize your ship's sail color during construction or afterwards. Press `E` while placing a ship with your Hammer, or `Left Alt + E` while looking at an existing ship.
 - **Configurable Keybindings:** Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
 - **Builder Identity & Restrictions:** When a ship is constructed, the builder's identity is recorded. Only the builder (owner) can rename, recolor, or deconstruct the ship. The owner's name is displayed in the hover text.
 - **Mod Compatibility:** Specifically designed to work alongside popular mods like `QuickStackStore`. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
@@ -40,11 +40,11 @@ The mod generates a configuration file at `BepInEx/config/com.malafein.shipwrigh
 - **AllowShipDeconstruction:** Set to `true` to allow removing ships with the hammer tool.
 
 ### Controls
-- **RenameShip:** Rename the ship you are looking at. Default `Shift + E`.
-- **ChangeSailColor:** Cycle the sail color of the ship you are looking at. Default `Alt + E`.
+- **RenameShip:** Rename the ship you are looking at. Default `Left Shift + E`.
+- **ChangeSailColor:** Cycle the sail color of the ship you are looking at. Default `Left Alt + E`.
 - **ChangeSailColorWhilePlacing:** Cycle the sail color while placing a ship with the Hammer. Default `E`.
 
-Either the left or right Shift, Ctrl, or Alt key satisfies a modifier. Plain `E` still works as normal on a ship: it takes the helm or sits you down.
+Left and right Shift, Ctrl, and Alt are separate keys, as they are in the game. Plain `E` still works as normal on a ship: it takes the helm or sits you down.
 
 If one of these keybindings is also bound to a game action, a warning is written to the BepInEx log (`LogOutput.log`) at startup and whenever a binding changes.
 
