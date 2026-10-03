@@ -3,7 +3,7 @@ using HarmonyLib;
 using malafein.Valheim.Shared;
 using UnityEngine;
 
-namespace ValheimBoatCustomizer
+namespace malafein.Valheim.ShipwrightsTouch
 {
     [HarmonyPatch]
     public static class HoverTextPatches

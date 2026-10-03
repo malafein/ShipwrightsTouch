@@ -3,7 +3,7 @@ using malafein.Valheim.Shared;
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace ValheimBoatCustomizer
+namespace malafein.Valheim.ShipwrightsTouch
 {
     [HarmonyPatch]
     public static class ColoringPatches
