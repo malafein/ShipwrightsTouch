@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-using HarmonyLib;
+using MagicaCloth2;
 using UnityEngine;
 
 namespace malafein.Valheim.ShipwrightsTouch
@@ -23,12 +22,6 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         private static readonly int MainTexScaleOffsetId = Shader.PropertyToID("_MainTex_ST");
-
-        // Ship.m_sailCloth is a MagicaCloth2.MagicaCloth. MagicaClothV2.dll is built against
-        // .NET Standard 2.1, and referencing it from this net462 project causes netstandard
-        // version conflicts the build can't resolve, so the cloth is read by reflection. It's
-        // only read once per ship.
-        private static readonly FieldInfo SailClothField = AccessTools.Field(typeof(Ship), "m_sailCloth");
 
         private static readonly ConditionalWeakTable<Ship, SailPart[]> s_parts = new ConditionalWeakTable<Ship, SailPart[]>();
         private static readonly MaterialPropertyBlock s_block = new MaterialPropertyBlock();
@@ -66,10 +59,10 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static SailPart[] FindParts(Ship ship)
         {
             IEnumerable<Renderer> renderers;
-            List<Renderer> clothRenderers = ClothRenderers(ship);
-            if (clothRenderers != null && clothRenderers.Any(r => r != null))
+            MagicaCloth cloth = ship.m_sailCloth;
+            if (cloth != null && cloth.SerializeData.sourceRenderers.Any(r => r != null))
             {
-                renderers = clothRenderers.Where(r => r != null);
+                renderers = cloth.SerializeData.sourceRenderers.Where(r => r != null);
             }
             else
             {
@@ -81,16 +74,6 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
 
             return renderers.Select(CreatePart).ToArray();
-        }
-
-        // MagicaCloth.SerializeData.sourceRenderers, or null if the ship has no cloth.
-        private static List<Renderer> ClothRenderers(Ship ship)
-        {
-            // A destroyed Unity object compares equal to null only through UnityEngine.Object.
-            if (!(SailClothField?.GetValue(ship) is Object cloth) || cloth == null) return null;
-
-            object data = Traverse.Create(cloth).Property("SerializeData").GetValue();
-            return data == null ? null : Traverse.Create(data).Field("sourceRenderers").GetValue<List<Renderer>>();
         }
 
         private static SailPart CreatePart(Renderer renderer)

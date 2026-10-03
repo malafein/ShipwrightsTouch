@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net462</TargetFramework>
+    <!-- Valheim 1.0 runs Unity 6's Mono: the .NET Framework 4.8 API plus .NET Standard 2.1. -->
+    <TargetFramework>net48</TargetFramework>
     <AssemblyName>ShipwrightsTouch</AssemblyName>
     <Description>Extra features for Valheim boats: naming and sail coloring.</Description>
     <Version>1.1.1</Version>
@@ -10,26 +11,42 @@
     <RestoreAdditionalProjectSources>
       https://nuget.bepinex.dev/v3/index.json
     </RestoreAdditionalProjectSources>
+    <ValheimManaged>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed</ValheimManaged>
+    <!-- Resolve mscorlib, System, netstandard etc. from the game's own Managed folder instead of
+         .NET Framework's reference assemblies, so every API the compiler sees exists at runtime. -->
+    <FrameworkPathOverride>$(ValheimManaged)</FrameworkPathOverride>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.4.21" />
-    <PackageReference Include="UnityEngine.Modules" Version="2019.4.31" IncludeAssets="compile" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- You will need to update these paths to point to your Valheim managed folder -->
+    <!-- Compile against the game's own assemblies, so the Unity API matches what actually runs. -->
     <Reference Include="assembly_valheim">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_valheim.dll</HintPath>
+      <HintPath>$(ValheimManaged)/assembly_valheim.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="assembly_guiutils">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_guiutils.dll</HintPath>
+      <HintPath>$(ValheimManaged)/assembly_guiutils.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="assembly_utils">
-      <HintPath>/home/malafein/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_utils.dll</HintPath>
+      <HintPath>$(ValheimManaged)/assembly_utils.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MagicaClothV2">
+      <HintPath>$(ValheimManaged)/MagicaClothV2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Not an implicit framework reference, but the Unity 6 modules are built against it. -->
+    <Reference Include="netstandard">
+      <HintPath>$(ValheimManaged)/netstandard.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(ValheimManaged)/UnityEngine.dll;$(ValheimManaged)/UnityEngine.*Module.dll">
       <Private>false</Private>
     </Reference>
   </ItemGroup>
