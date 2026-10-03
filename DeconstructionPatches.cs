@@ -1,4 +1,5 @@
 using HarmonyLib;
+using malafein.Valheim.Shared;
 using UnityEngine;
 
 namespace ValheimBoatCustomizer
@@ -18,7 +19,7 @@ namespace ValheimBoatCustomizer
                 // Also check if it's a ship piece by name as a fallback
                 if (piece.m_name.Contains("karve") || piece.m_name.Contains("longship") || piece.m_name.Contains("raft"))
                 {
-                    ZLog.LogWarning($"[ShipwrightsTouch] Found ship piece {piece.m_name} but no Ship component in parent.");
+                    Log.Warn($"Found ship piece {piece.m_name} but no Ship component in parent.");
                 }
                 return;
             }
@@ -28,7 +29,7 @@ namespace ValheimBoatCustomizer
             if (!piece.m_canBeRemoved)
             {
                 piece.m_canBeRemoved = true;
-                ZLog.LogWarning($"[ShipwrightsTouch] Force-allowing deconstruction of ship piece: {piece.m_name}");
+                Log.Debug($"Force-allowing deconstruction of ship piece: {piece.m_name}");
             }
         }
 

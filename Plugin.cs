@@ -65,17 +65,16 @@ namespace ValheimBoatCustomizer
             Keybinds.Add(SailColorPlacingKey, "Placing");
 
 
-            Logger.LogInfo($"{ModName} {ModVersion} is loading...");
-            try 
+            Log.Info($"{ModName} {ModVersion} is loading...");
+            try
             {
                 harmony.PatchAll();
-                Logger.LogInfo($"{ModName} patches applied successfully.");
             }
             catch (System.Exception e)
             {
-                Logger.LogError($"{ModName} failed to apply some patches: {e}");
+                Log.Error($"Failed to apply some patches: {e}");
             }
-            Logger.LogInfo($"{ModName} loaded!");
+            Log.Info($"{ModName} loaded!");
         }
 
         public static bool CanModifyShip(Ship ship, out string ownerName)

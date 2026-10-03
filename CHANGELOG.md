@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Left and right Shift, Ctrl, and Alt are now separate keys, as they are in the game. The default shortcuts use the left-hand keys, so if you pressed the right-hand ones, rebind the shortcut or switch hands.
+- Log messages now appear in the BepInEx log under the mod's name, and routine messages are no longer logged as warnings.
 
 ## [1.1.1] - 2026-09-10
 

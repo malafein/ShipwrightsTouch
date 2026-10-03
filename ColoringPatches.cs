@@ -83,7 +83,7 @@ namespace ValheimBoatCustomizer
 
             if (m_isPlacing && nview.IsOwner())
             {
-                ZLog.LogWarning($"[ShipwrightsTouch] Setting initial sail style {m_selectedStyle} for new ship: {__instance.gameObject.name}");
+                Log.Debug($"Setting initial sail style {m_selectedStyle} for new ship: {__instance.gameObject.name}");
                 nview.GetZDO().Set(Plugin.ZdoStyleKey, m_selectedStyle);
 
                 if (Plugin.AssignBuilderIdentity.Value && Player.m_localPlayer != null)
@@ -119,23 +119,16 @@ namespace ValheimBoatCustomizer
             Color targetColor = SailColors[style];
             
             Renderer[] renderers = ship.GetComponentsInChildren<Renderer>(true);
-            int count = 0;
             foreach (var renderer in renderers)
             {
                 string name = renderer.gameObject.name.ToLower();
                 if (name.Contains("sail") || name.Contains("cloth") || name.Contains("flag"))
                 {
-                    count++;
                     MaterialPropertyBlock propBlock = new MaterialPropertyBlock();
                     renderer.GetPropertyBlock(propBlock);
                     propBlock.SetColor("_Color", targetColor);
                     renderer.SetPropertyBlock(propBlock);
                 }
-            }
-            
-            if (count > 0)
-            {
-                // ZLog.LogWarning($"[ShipwrightsTouch] Applied style {style} to {count} renderers on {ship.gameObject.name}");
             }
         }
 
