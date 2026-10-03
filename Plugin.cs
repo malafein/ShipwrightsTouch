@@ -17,6 +17,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public const string ZdoOwnerNameKey = "shipwrightstouch.builder_name";
         public const string ZdoNameKey = "custom_ship_name";
         public const string ZdoStyleKey = "custom_sail_style";
+        public const string ZdoTextureKey = "shipwrightstouch.sail_texture";
 
         public static ConfigEntry<bool> AllowShipDeconstruction;
         public static ConfigEntry<bool> AssignBuilderIdentity;
@@ -64,6 +65,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             // Only active while placing a ship, so it can't collide with the other two.
             Keybinds.Add(SailColorPlacingKey, "Placing");
 
+
+            SailTextures.Refresh();
 
             Log.Info($"{ModName} {ModVersion} is loading...");
             try
