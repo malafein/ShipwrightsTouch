@@ -73,6 +73,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             Keybinds.Add(SailColorPlacingKey, "Placing");
 
 
+            SailPolicy.Bind(Config);
+            SailNetwork.Init(Config);
             SailTextures.Refresh();
 
             Log.Info($"{ModName} {ModVersion} is loading...");

@@ -98,7 +98,9 @@ namespace malafein.Valheim.ShipwrightsTouch
             ZDO zdo = nview.GetZDO();
             if (!SailStyle.TryGetColor(zdo, out Color color)) return;
 
-            SailAppearance.Apply(ship, color, SailTextures.Get(zdo.GetString(Plugin.ZdoTextureKey)));
+            // A server that turns custom textures off shows the vanilla sail on every ship.
+            Texture2D texture = SailNetwork.Policy.AllowCustomTextures ? SailTextures.Get(zdo.GetString(Plugin.ZdoTextureKey)) : null;
+            SailAppearance.Apply(ship, color, texture);
         }
 
         // Placement ghosts have no ZDO; they preview the selected color only.

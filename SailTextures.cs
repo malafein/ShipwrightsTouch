@@ -24,8 +24,8 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // Vanilla sails are 128-256 px, so this is generous; it bounds memory and, later, the
         // bytes sent between players.
-        private const int MaxDimension = 2048;
-        private const long MaxFileBytes = 4 * 1024 * 1024;
+        internal const int MaxDimension = 2048;
+        internal const int MaxFileBytes = 4 * 1024 * 1024;
 
         private static readonly string[] Extensions = { ".png", ".jpg", ".jpeg" };
 

@@ -97,7 +97,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public bool IsOpen => gameObject.activeSelf;
         public Ship Ship { get; private set; }
         public Color PreviewColor => _color;
-        public Texture2D PreviewTexture => SailTextures.Get(_textureHash);
+        public Texture2D PreviewTexture => SailNetwork.Policy.AllowCustomTextures ? SailTextures.Get(_textureHash) : null;
 
         private TMP_InputField _nameField;
         private TMP_InputField _hexField;
@@ -136,6 +136,11 @@ namespace malafein.Valheim.ShipwrightsTouch
             var background = go.GetComponent<Image>();
             if (!VanillaUI.ApplyPanelBackground(background))
                 background.color = new Color(0.05f, 0.05f, 0.05f, 0.95f);
+
+            // Its own sorting layer, so HUD elements later in the HUD's draw order (food, health,
+            // weight) can't draw over it. A nested canvas needs its own raycaster for clicks.
+            go.AddComponent<Canvas>();
+            go.AddComponent<GraphicRaycaster>();
 
             var controller = go.GetComponent<CustomizePanelController>();
             controller.BuildLayout();
@@ -184,6 +189,9 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             _textureHint = UIBuilder.AddText(Place("TextureHint", 450f, 22f), "", font, 14f, TextAlignmentOptions.MidlineLeft);
             _textureHint.color = HintColor;
+            _textureHint.enableAutoSizing = true;
+            _textureHint.fontSizeMin = 11f;
+            _textureHint.fontSizeMax = 14f;
 
             // Sail color
             AddHeader("ColorHeader", "Sail color", 480f);
@@ -235,7 +243,17 @@ namespace malafein.Valheim.ShipwrightsTouch
             RefreshColor();
 
             gameObject.SetActive(true);
+            DrawAboveHud();
             ColoringPatches.UpdateSailAppearance(ship);
+        }
+
+        // Set after activation: Unity can drop overrideSorting set on an inactive canvas.
+        private void DrawAboveHud()
+        {
+            var canvas = GetComponent<Canvas>();
+            Canvas parentCanvas = transform.parent != null ? transform.parent.GetComponentInParent<Canvas>() : null;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = (parentCanvas != null ? parentCanvas.sortingOrder : 0) + 10;
         }
 
         public void Close()
@@ -322,15 +340,25 @@ namespace malafein.Valheim.ShipwrightsTouch
             _textureRows.Clear();
 
             AddTextureRow("", "Vanilla sail", SailAppearance.VanillaTextureOf(Ship));
-            foreach (SailTextures.Entry entry in SailTextures.Entries)
+            if (SailNetwork.Policy.AllowCustomTextures)
             {
-                AddTextureRow(entry.Hash, entry.Name, SailTextures.Get(entry.Hash));
+                foreach (SailTextures.Entry entry in SailTextures.Entries)
+                {
+                    AddTextureRow(entry.Hash, entry.Name, SailTextures.Get(entry.Hash));
+                }
             }
 
-            _textureHint.text = SailTextures.Entries.Count == 0
+            _textureHint.text = TextureHint();
+            RefreshTextureSelection();
+        }
+
+        private static string TextureHint()
+        {
+            if (!SailNetwork.Policy.AllowCustomTextures) return "This server doesn't allow custom sail textures.";
+            if (SailNetwork.Mode == ServerMode.Vanilla) return "This server doesn't have Shipwright's Touch: custom sail textures show only for you.";
+            return SailTextures.Entries.Count == 0
                 ? "Add PNG or JPG images to BepInEx/config/ShipwrightsTouch/sails"
                 : "Images from BepInEx/config/ShipwrightsTouch/sails";
-            RefreshTextureSelection();
         }
 
         private void AddTextureRow(string hash, string label, Texture thumbnail)
