@@ -12,10 +12,17 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // Decodes the image, shrinks it to fit Size x Size (aspect kept) with a box filter on the
         // CPU, and encodes the result as PNG. Never touches the GPU copy, so it doesn't depend on
-        // the graphics device. Null if the bytes aren't a readable PNG or JPG.
-        public static byte[] Make(byte[] imageBytes, out string error)
+        // the graphics device. Also reports the source image's size. Null if the bytes aren't a
+        // readable PNG or JPG.
+        public static byte[] Make(
+            byte[] imageBytes,
+            out int sourceWidth,
+            out int sourceHeight,
+            out string error)
         {
             error = null;
+            sourceWidth = 0;
+            sourceHeight = 0;
             var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             Texture2D thumbnail = null;
             try
@@ -26,8 +33,8 @@ namespace malafein.Valheim.ShipwrightsTouch
                     return null;
                 }
 
-                int sourceWidth = source.width;
-                int sourceHeight = source.height;
+                sourceWidth = source.width;
+                sourceHeight = source.height;
                 float scale = Math.Min(1f, (float)Size / Math.Max(sourceWidth, sourceHeight));
                 int width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
                 int height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
@@ -42,7 +49,13 @@ namespace malafein.Valheim.ShipwrightsTouch
                     {
                         int x0 = x * sourceWidth / width;
                         int x1 = Math.Max(x0 + 1, (x + 1) * sourceWidth / width);
-                        pixels[y * width + x] = Average(sourcePixels, sourceWidth, x0, x1, y0, y1);
+                        pixels[y * width + x] = Average(
+                            sourcePixels,
+                            source.width,
+                            x0,
+                            x1,
+                            y0,
+                            y1);
                     }
                 }
 

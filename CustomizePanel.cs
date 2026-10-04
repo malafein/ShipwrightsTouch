@@ -86,6 +86,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             public string Hash;
             public Image Background;
+            public RawImage Thumbnail;
         }
 
         private class Swatch
@@ -111,6 +112,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private readonly List<Swatch> _presetSwatches = new List<Swatch>();
         private readonly List<Swatch> _recentSwatches = new List<Swatch>();
         private string _recentKey;
+        private string _catalogKey;
 
         // Unsaved choices, written to the ZDO on Apply.
         private string _textureHash = "";
@@ -144,6 +146,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             var controller = go.GetComponent<CustomizePanelController>();
             controller.BuildLayout();
+            SailDownloads.Changed += controller.DownloadsChanged;
             go.SetActive(false);
             return controller;
         }
@@ -346,10 +349,61 @@ namespace malafein.Valheim.ShipwrightsTouch
                 {
                     AddTextureRow(entry.Hash, entry.Name, SailTextures.Get(entry.Hash));
                 }
+
+                // The server's textures, after the player's own; one row per texture.
+                foreach (CatalogEntry entry in SortedCatalog())
+                {
+                    if (SailTextures.IsLocal(entry.Hash)) continue;
+                    string label = $"{entry.Name} <size=75%><color=#B0B0B0>server</color></size>";
+                    AddTextureRow(entry.Hash, label, SailDownloads.Thumbnail(entry.Hash));
+                }
+                SailDownloads.RequestThumbnails();
             }
 
+            _catalogKey = CatalogKey();
             _textureHint.text = TextureHint();
             RefreshTextureSelection();
+        }
+
+        private static List<CatalogEntry> SortedCatalog()
+        {
+            var entries = new List<CatalogEntry>(SailDownloads.Catalog);
+            entries.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            return entries;
+        }
+
+        private static string CatalogKey()
+        {
+            var hashes = new List<string>();
+            foreach (CatalogEntry entry in SailDownloads.Catalog) hashes.Add(entry.Hash);
+            hashes.Sort(System.StringComparer.Ordinal);
+            return SailNetwork.Policy.AllowCustomTextures + ":" + string.Join(",", hashes);
+        }
+
+        // The panel is rebuilt with the Hud on every world load; drop the old one's listener.
+        private void OnDestroy()
+        {
+            SailDownloads.Changed -= DownloadsChanged;
+        }
+
+        // A new catalog rebuilds the list; a thumbnail arriving only fills in its row, so the
+        // list doesn't jump while the player scrolls.
+        private void DownloadsChanged()
+        {
+            if (!IsOpen) return;
+            if (CatalogKey() != _catalogKey)
+            {
+                RebuildTextureRows();
+                return;
+            }
+            foreach (TextureRow row in _textureRows)
+            {
+                if (row.Thumbnail.texture != null || row.Hash == "") continue;
+                Texture2D thumbnail = SailDownloads.Thumbnail(row.Hash);
+                if (thumbnail == null) continue;
+                row.Thumbnail.texture = thumbnail;
+                row.Thumbnail.enabled = true;
+            }
         }
 
         private static string TextureHint()
@@ -379,18 +433,17 @@ namespace malafein.Valheim.ShipwrightsTouch
             button.colors = colors;
             button.onClick.AddListener(() => SelectTexture(hash));
 
-            if (thumbnail != null)
-            {
-                RectTransform thumbRt = UIBuilder.MakeChildRect(go.transform, "Thumbnail");
-                thumbRt.anchorMin = new Vector2(0f, 0.5f);
-                thumbRt.anchorMax = new Vector2(0f, 0.5f);
-                thumbRt.pivot = new Vector2(0f, 0.5f);
-                thumbRt.sizeDelta = new Vector2(RowHeight - 8f, RowHeight - 8f);
-                thumbRt.anchoredPosition = new Vector2(4f, 0f);
-                var image = thumbRt.gameObject.AddComponent<RawImage>();
-                image.texture = thumbnail;
-                image.raycastTarget = false;
-            }
+            // Always created, so a thumbnail that arrives later can fill it in.
+            RectTransform thumbRt = UIBuilder.MakeChildRect(go.transform, "Thumbnail");
+            thumbRt.anchorMin = new Vector2(0f, 0.5f);
+            thumbRt.anchorMax = new Vector2(0f, 0.5f);
+            thumbRt.pivot = new Vector2(0f, 0.5f);
+            thumbRt.sizeDelta = new Vector2(RowHeight - 8f, RowHeight - 8f);
+            thumbRt.anchoredPosition = new Vector2(4f, 0f);
+            var image = thumbRt.gameObject.AddComponent<RawImage>();
+            image.texture = thumbnail;
+            image.raycastTarget = false;
+            image.enabled = thumbnail != null;
 
             RectTransform labelRt = UIBuilder.MakeChildRect(go.transform, "Label");
             labelRt.anchorMin = Vector2.zero;
@@ -399,6 +452,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             labelRt.offsetMax = new Vector2(-40f, 0f);
             var text = UIBuilder.AddText(labelRt, label, VanillaUI.BodyFont, 18f, TextAlignmentOptions.MidlineLeft);
             text.raycastTarget = false;
+            text.richText = true;
 
             // Status icon slot (approved / pending / denied), filled once the server catalog exists.
             RectTransform statusRt = UIBuilder.MakeChildRect(go.transform, "Status");
@@ -411,7 +465,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             status.raycastTarget = false;
             status.enabled = false;
 
-            _textureRows.Add(new TextureRow { Hash = hash, Background = background });
+            _textureRows.Add(new TextureRow { Hash = hash, Background = background, Thumbnail = image });
         }
 
         private void SelectTexture(string hash)

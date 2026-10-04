@@ -71,7 +71,10 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // Returns the texture for a hash, loading it on first use, or null if this client doesn't
-        // have it (the sail then shows the vanilla texture).
+        // have it (the sail then shows the vanilla texture). Looks in the local folder, then the
+        // download cache; a texture in the server's catalog but not here yet is requested, and
+        // shows up on a later call once it has arrived. Called every frame per ship, so the miss
+        // path stays cheap.
         public static Texture2D Get(string hash)
         {
             if (string.IsNullOrEmpty(hash)) return null;
@@ -79,7 +82,20 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (s_failed.Contains(hash)) return null;
 
             Entry entry = s_entries.FirstOrDefault(e => e.Hash == hash);
-            if (entry == null) return null;
+            if (entry == null && SailDownloads.IsCached(hash))
+            {
+                entry = new Entry
+                {
+                    Hash = hash,
+                    Name = SailDownloads.Find(hash)?.Name ?? hash.Substring(0, 8),
+                    Path = SailDownloads.CachedPath(hash)
+                };
+            }
+            if (entry == null)
+            {
+                SailDownloads.Request(hash);
+                return null;
+            }
 
             texture = Load(entry);
             if (texture == null)
@@ -94,8 +110,10 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static string NameOf(string hash)
         {
-            return s_entries.FirstOrDefault(e => e.Hash == hash)?.Name;
+            return s_entries.FirstOrDefault(e => e.Hash == hash)?.Name ?? SailDownloads.Find(hash)?.Name;
         }
+
+        public static bool IsLocal(string hash) => s_entries.Any(e => e.Hash == hash);
 
         private static Texture2D Load(Entry entry)
         {
@@ -131,7 +149,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             return texture;
         }
 
-        private static string HashOf(byte[] bytes)
+        internal static string HashOf(byte[] bytes)
         {
             using (SHA256 sha = SHA256.Create())
             {
