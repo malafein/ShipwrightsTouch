@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using BepInEx;
 using malafein.Valheim.Shared;
 using UnityEngine;
@@ -49,6 +50,18 @@ namespace malafein.Valheim.ShipwrightsTouch
             return hash != null && s_catalog.TryGetValue(hash, out CatalogEntry entry) ? entry : null;
         }
 
+        // Whether a texture from the server may be shown and downloaded: in its catalog, not
+        // denied, and not another player's when the player turned those off.
+        public static bool MayShow(string hash)
+        {
+            CatalogEntry entry = Find(hash);
+            if (entry == null || entry.Status == TextureStatus.Denied) return false;
+            return entry.Source == TextureSource.Server || entry.Mine || Plugin.ShowOtherPlayersTextures.Value;
+        }
+
+        // Textures this player has shared that count toward the server's per-player limit.
+        public static int SharedCount() => s_catalog.Values.Count(e => e.Mine && e.CountsTowardLimit);
+
         // ── Full images ──────────────────────────────────────────────────
 
         public static string CachedPath(string hash) => Path.Combine(CacheFolder, hash);
@@ -70,7 +83,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         // to call every frame for the same hash.
         public static void Request(string hash)
         {
-            if (SailNetwork.Mode != ServerMode.Modded || !s_catalog.ContainsKey(hash)) return;
+            if (SailNetwork.Mode != ServerMode.Modded || !MayShow(hash)) return;
             if (s_downloads.TryGetValue(hash, out Download pending) && Time.time - pending.LastActivity < RetrySeconds) return;
 
             s_downloads[hash] = new Download { LastActivity = Time.time };
@@ -80,20 +93,27 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // ── Thumbnails ───────────────────────────────────────────────────
 
-        // From memory or the disk cache; otherwise requested (see RequestThumbnails) and null.
+        // From memory, the server itself when hosting, or the disk cache; otherwise requested (see
+        // RequestThumbnails) and null.
         public static Texture2D Thumbnail(string hash)
         {
             if (s_thumbnails.TryGetValue(hash, out Texture2D texture)) return texture;
 
-            string path = Path.Combine(ThumbnailFolder, hash + ".png");
-            if (!File.Exists(path)) return null;
+            byte[] png = SailServer.ThumbnailOf(hash);
+            if (png == null)
+            {
+                string path = Path.Combine(ThumbnailFolder, hash + ".png");
+                if (!File.Exists(path)) return null;
+                png = File.ReadAllBytes(path);
+            }
 
-            texture = LoadThumbnail(File.ReadAllBytes(path));
+            texture = LoadThumbnail(png);
             if (texture != null) s_thumbnails[hash] = texture;
             return texture;
         }
 
-        // Asks for every catalog thumbnail not cached yet, in one message.
+        // Asks for every catalog thumbnail not cached yet, in one message. Skips textures the player
+        // has in their own folder (the panel shows those from the image itself).
         public static void RequestThumbnails()
         {
             if (SailNetwork.Mode != ServerMode.Modded) return;
@@ -101,6 +121,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             var missing = new List<string>();
             foreach (string hash in s_catalog.Keys)
             {
+                if (!MayShow(hash) || SailTextures.IsLocal(hash)) continue;
                 if (!s_thumbnailsRequested.Contains(hash) && Thumbnail(hash) == null) missing.Add(hash);
             }
             if (missing.Count == 0) return;
@@ -116,6 +137,14 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // ── Messages from the server ─────────────────────────────────────
+
+        // When this game hosts: the server hands its catalog over directly.
+        public static void SetHostCatalog(List<CatalogEntry> entries)
+        {
+            s_catalog.Clear();
+            foreach (CatalogEntry entry in entries) s_catalog[entry.Hash] = entry;
+            Changed?.Invoke();
+        }
 
         public static void RPC_Catalog(long sender, ZPackage package)
         {
@@ -209,7 +238,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // Hashes become file names, so only accept exactly what SailTextures.HashOf produces.
-        private static bool IsHash(string hash)
+        internal static bool IsHash(string hash)
         {
             if (hash == null || hash.Length != 64) return false;
             foreach (char c in hash)

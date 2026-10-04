@@ -4,6 +4,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using malafein.Valheim.Shared;
+using malafein.Valheim.SharedUI;
 using UnityEngine;
 
 namespace malafein.Valheim.ShipwrightsTouch
@@ -29,6 +30,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<KeyboardShortcut> CustomizeShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorPlacingKey;
+        public static ConfigEntry<float> ScrollSensitivity;
+        public static ConfigEntry<bool> ShareTextures;
+        public static ConfigEntry<bool> ShowOtherPlayersTextures;
 
         private readonly Harmony harmony = new Harmony(ModGUID);
 
@@ -38,6 +42,10 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             AllowShipDeconstruction = Config.Bind("General", "AllowShipDeconstruction", false, "Allow deconstructing ships with the hammer (middle-mouse button).");
             AssignBuilderIdentity = Config.Bind("General", "AssignBuilderIdentity", true, "Automatically assign your character as the owner when constructing a ship, restricting modifications (renaming, recoloring, deconstruction) to yourself.");
+
+            ScrollSensitivity = Config.Bind("General", "ScrollSensitivity", UIBuilder.DefaultScrollSensitivity, "Mouse-wheel scroll speed in the customization panel's texture list. Higher scrolls faster. Applied each time the panel opens.");
+            ShareTextures = Config.Bind("Sharing", "ShareMyTextures", true, "On a server with this mod, share a texture from your sails folder with the server the first time you put it on a ship, so other players can see it (if the server allows it, possibly after an admin's approval). When off, your textures show only for you.");
+            ShowOtherPlayersTextures = Config.Bind("Sharing", "ShowOtherPlayersTextures", true, "Show and download the sail textures other players have shared on the server. When off, their ships show the vanilla sail to you. The server's own textures still show.");
 
             MigrateRenameKey();
 

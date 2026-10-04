@@ -44,11 +44,15 @@ namespace malafein.Valheim.ShipwrightsTouch
         private const string HelloRpc = "ShipwrightsTouch_Hello";
         private const string PolicyRpc = "ShipwrightsTouch_Policy";
         private const string SetPolicyRpc = "ShipwrightsTouch_SetPolicy";
+        private const string RefreshRpc = "ShipwrightsTouch_Refresh";
         internal const string CatalogRpc = "ShipwrightsTouch_Catalog";
         internal const string GetThumbnailsRpc = "ShipwrightsTouch_GetThumbnails";
         internal const string ThumbnailsRpc = "ShipwrightsTouch_Thumbnails";
         internal const string GetTextureRpc = "ShipwrightsTouch_GetTexture";
         internal const string TextureChunkRpc = "ShipwrightsTouch_TextureChunk";
+        internal const string OfferUploadRpc = "ShipwrightsTouch_OfferUpload";
+        internal const string UploadChunkRpc = "ShipwrightsTouch_UploadChunk";
+        internal const string UploadAnswerRpc = "ShipwrightsTouch_UploadAnswer";
 
         // Server: peers that completed the handshake with a matching protocol.
         private static readonly HashSet<long> s_moddedPeers = new HashSet<long>();
@@ -85,12 +89,17 @@ namespace malafein.Valheim.ShipwrightsTouch
             rpc.Register<int>(HelloRpc, RPC_Hello);
             rpc.Register<ZPackage>(PolicyRpc, RPC_Policy);
             rpc.Register<ZPackage>(SetPolicyRpc, RPC_SetPolicy);
+            rpc.Register(RefreshRpc, RPC_Refresh);
             rpc.Register<ZPackage>(CatalogRpc, SailDownloads.RPC_Catalog);
             rpc.Register<ZPackage>(GetThumbnailsRpc, SailServer.RPC_GetThumbnails);
             rpc.Register<ZPackage>(ThumbnailsRpc, SailDownloads.RPC_Thumbnails);
             rpc.Register<string>(GetTextureRpc, SailServer.RPC_GetTexture);
             rpc.Register<ZPackage>(TextureChunkRpc, SailDownloads.RPC_TextureChunk);
+            rpc.Register<ZPackage>(OfferUploadRpc, SailServer.RPC_OfferUpload);
+            rpc.Register<ZPackage>(UploadChunkRpc, SailServer.RPC_UploadChunk);
+            rpc.Register<ZPackage>(UploadAnswerRpc, SailUploads.RPC_UploadAnswer);
             SailDownloads.StartSession();
+            SailUploads.StartSession();
 
             if (net.IsServer())
             {
@@ -155,6 +164,14 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (firstAnswer) Log.Info($"The server runs {Plugin.ModName}; its sail texture settings apply.");
             Log.Debug($"Server sail policy: {Policy} admin={IsAdmin}");
             Changed?.Invoke();
+        }
+
+        // Asks a modded server for the current policy and catalog, so a panel opens on fresh
+        // values even if something changed without a broadcast (an adminlist.txt edit).
+        public static void RequestRefresh()
+        {
+            if (Mode != ServerMode.Modded) return;
+            ZRoutedRpc.instance.InvokeRoutedRPC(ZNet.instance.GetServerPeer().m_uid, RefreshRpc);
         }
 
         // The player edited a [Server] setting while connected to a modded server.
@@ -222,6 +239,16 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static bool IsModdedPeer(long peer) => s_moddedPeers.Contains(peer);
 
+        private static void RPC_Refresh(long sender)
+        {
+            ZNet net = ZNet.instance;
+            if (net == null || !net.IsServer() || !s_moddedPeers.Contains(sender)) return;
+            SendPolicy(sender);
+            SailServer.SendCatalog(sender);
+        }
+
+        public static IEnumerable<long> ModdedPeers => s_moddedPeers;
+
         private static void RPC_SetPolicy(long sender, ZPackage package)
         {
             ZNet net = ZNet.instance;
@@ -251,12 +278,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (net == null || !net.IsServer() || ZNet.IsSinglePlayer) return;
 
             Policy = SailPolicy.FromConfig();
-            foreach (long peer in s_moddedPeers)
-            {
-                SendPolicy(peer);
-                // What each peer may see depends on the policy.
-                SailServer.SendCatalog(peer);
-            }
+            foreach (long peer in s_moddedPeers) SendPolicy(peer);
+
+            // What each peer may see depends on the policy.
+            SailServer.SendCatalogToAll();
             Changed?.Invoke();
         }
 
@@ -278,11 +303,18 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (net == null || !net.IsServer()) return false;
             if (peer == ZNet.GetUID()) return true;
 
-            string hostName = net.GetPeer(peer)?.m_socket?.GetHostName();
-            return !string.IsNullOrEmpty(hostName) && net.IsAdmin(hostName);
+            string hostName = PeerId(peer);
+            return hostName != "" && net.IsAdmin(hostName);
         }
 
-        private static string PeerName(long peer)
+        // Server only. The peer's platform ID as its connection reports it (what adminlist.txt
+        // holds); empty if unknown.
+        public static string PeerId(long peer)
+        {
+            return ZNet.instance?.GetPeer(peer)?.m_socket?.GetHostName() ?? "";
+        }
+
+        public static string PeerName(long peer)
         {
             ZNetPeer znetPeer = ZNet.instance?.GetPeer(peer);
             return znetPeer != null ? $"{znetPeer.m_playerName} ({znetPeer.m_socket?.GetHostName()})" : peer.ToString();

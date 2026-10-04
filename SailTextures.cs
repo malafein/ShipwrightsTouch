@@ -30,10 +30,12 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static readonly string[] Extensions = { ".png", ".jpg", ".jpeg" };
 
         private static readonly List<Entry> s_entries = new List<Entry>();
+        private static readonly Dictionary<string, Entry> s_byHash = new Dictionary<string, Entry>();
         private static readonly Dictionary<string, Texture2D> s_loaded = new Dictionary<string, Texture2D>();
 
-        // Hashes that failed to load, so a bad file isn't decoded again every frame.
-        private static readonly HashSet<string> s_failed = new HashSet<string>();
+        // Hashes that failed to load, and why (shown in the panel), so a bad file isn't decoded
+        // again every frame.
+        private static readonly Dictionary<string, string> s_failed = new Dictionary<string, string>();
 
         public static string Folder => System.IO.Path.Combine(Paths.ConfigPath, "ShipwrightsTouch", "sails");
 
@@ -46,6 +48,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             Directory.CreateDirectory(Folder);
 
             s_entries.Clear();
+            s_byHash.Clear();
             foreach (string path in Directory.GetFiles(Folder).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
             {
                 if (!Extensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant())) continue;
@@ -58,31 +61,44 @@ namespace malafein.Valheim.ShipwrightsTouch
                 }
 
                 string hash = HashOf(File.ReadAllBytes(path));
-                if (s_entries.Any(e => e.Hash == hash)) continue;
+                if (s_byHash.ContainsKey(hash)) continue;
 
-                s_entries.Add(new Entry
+                var entry = new Entry
                 {
                     Hash = hash,
                     Name = System.IO.Path.GetFileNameWithoutExtension(path),
                     Path = path
-                });
+                };
+                s_entries.Add(entry);
+                s_byHash[hash] = entry;
             }
             Log.Debug($"Found {s_entries.Count} sail texture(s) in {Folder}");
         }
 
         // Returns the texture for a hash, loading it on first use, or null if this client doesn't
-        // have it (the sail then shows the vanilla texture). Looks in the local folder, then the
-        // download cache; a texture in the server's catalog but not here yet is requested, and
-        // shows up on a later call once it has arrived. Called every frame per ship, so the miss
-        // path stays cheap.
+        // have it or may not show it (the sail then shows the vanilla texture). Looks in the local
+        // folder, then the download cache; a texture in the server's catalog but not here yet is
+        // requested, and shows up on a later call once it has arrived. Called every frame per
+        // ship, so every path stays cheap.
         public static Texture2D Get(string hash)
         {
             if (string.IsNullOrEmpty(hash)) return null;
-            if (s_loaded.TryGetValue(hash, out Texture2D texture)) return texture;
-            if (s_failed.Contains(hash)) return null;
 
-            Entry entry = s_entries.FirstOrDefault(e => e.Hash == hash);
-            if (entry == null && SailDownloads.IsCached(hash))
+            // Someone else's texture only while the server allows it (a later denial hides it even
+            // if it's already loaded or cached). A hosting player reads uploads straight from the
+            // server's uploads folder.
+            s_byHash.TryGetValue(hash, out Entry entry);
+            string serverPath = entry == null ? SailServer.PathOf(hash) : null;
+            if (entry == null && serverPath == null && !SailDownloads.MayShow(hash)) return null;
+
+            if (s_loaded.TryGetValue(hash, out Texture2D texture)) return texture;
+            if (s_failed.ContainsKey(hash)) return null;
+
+            if (serverPath != null)
+            {
+                entry = new Entry { Hash = hash, Name = hash.Substring(0, 8), Path = serverPath };
+            }
+            else if (entry == null && SailDownloads.IsCached(hash))
             {
                 entry = new Entry
                 {
@@ -97,10 +113,10 @@ namespace malafein.Valheim.ShipwrightsTouch
                 return null;
             }
 
-            texture = Load(entry);
+            texture = Load(entry, out string problem);
             if (texture == null)
             {
-                s_failed.Add(hash);
+                s_failed[hash] = problem;
                 return null;
             }
 
@@ -110,17 +126,26 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static string NameOf(string hash)
         {
-            return s_entries.FirstOrDefault(e => e.Hash == hash)?.Name ?? SailDownloads.Find(hash)?.Name;
+            return hash != null && s_byHash.TryGetValue(hash, out Entry entry) ? entry.Name : SailDownloads.Find(hash)?.Name;
         }
 
-        public static bool IsLocal(string hash) => s_entries.Any(e => e.Hash == hash);
+        public static bool IsLocal(string hash) => hash != null && s_byHash.ContainsKey(hash);
 
-        private static Texture2D Load(Entry entry)
+        // Why a texture couldn't be loaded ("unreadable", "too large", ...), or null. Known once
+        // Get has tried it.
+        public static string ProblemOf(string hash)
         {
+            return hash != null && s_failed.TryGetValue(hash, out string problem) ? problem : null;
+        }
+
+        private static Texture2D Load(Entry entry, out string problem)
+        {
+            problem = null;
             byte[] bytes = File.ReadAllBytes(entry.Path);
             if (HashOf(bytes) != entry.Hash)
             {
                 Log.Warn($"Sail texture {entry.Name} changed on disk since it was scanned; skipping it until the next refresh.");
+                problem = "changed";
                 return null;
             }
 
@@ -129,6 +154,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 Log.Warn($"Could not read sail texture {entry.Name}: not a valid PNG or JPG.");
                 UnityEngine.Object.Destroy(texture);
+                problem = "unreadable";
                 return null;
             }
 
@@ -136,6 +162,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 Log.Warn($"Skipping sail texture {entry.Name}: {texture.width}x{texture.height} is over the {MaxDimension}x{MaxDimension} limit.");
                 UnityEngine.Object.Destroy(texture);
+                problem = $"over {MaxDimension}x{MaxDimension}";
                 return null;
             }
 

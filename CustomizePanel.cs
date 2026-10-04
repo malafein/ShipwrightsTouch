@@ -106,6 +106,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private TextMeshProUGUI _ownerButtonLabel;
         private TextMeshProUGUI _textureHint;
         private RectTransform _textureList;
+        private ScrollRect _textureScroll;
         private RectTransform _recentRow;
 
         private readonly List<TextureRow> _textureRows = new List<TextureRow>();
@@ -147,6 +148,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             var controller = go.GetComponent<CustomizePanelController>();
             controller.BuildLayout();
             SailDownloads.Changed += controller.DownloadsChanged;
+            SailUploads.Changed += controller.UploadsChanged;
             go.SetActive(false);
             return controller;
         }
@@ -188,7 +190,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             var listBackground = listBox.gameObject.AddComponent<Image>();
             listBackground.color = new Color(0f, 0f, 0f, 0.3f);
             listBackground.raycastTarget = false;
-            _textureList = UIBuilder.BuildScrollableList(listBox, "TextureList", out _);
+            _textureList = UIBuilder.BuildScrollableList(listBox, "TextureList", out GameObject listRoot);
+            _textureScroll = listRoot.GetComponent<ScrollRect>();
 
             _textureHint = UIBuilder.AddText(Place("TextureHint", 450f, 22f), "", font, 14f, TextAlignmentOptions.MidlineLeft);
             _textureHint.color = HintColor;
@@ -239,7 +242,11 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             if (_nameField != null) _nameField.SetTextWithoutNotify(zdo.GetString(Plugin.ZdoNameKey));
 
+            // Config changes apply on the next open.
+            _textureScroll.scrollSensitivity = Plugin.ScrollSensitivity.Value;
+
             SailTextures.Refresh();
+            SailNetwork.RequestRefresh();
             RebuildTextureRows();
             _recentKey = null;
             RefreshOwner();
@@ -287,6 +294,9 @@ namespace malafein.Valheim.ShipwrightsTouch
             SailStyle.AddRecent(_color);
             zdo.Set(Plugin.ZdoOwnerIdKey, _ownerId);
             zdo.Set(Plugin.ZdoOwnerNameKey, _ownerName);
+
+            // Submit on first use: a texture from the player's folder that the server lacks.
+            SailUploads.Submit(_textureHash);
 
             Close();
         }
@@ -347,23 +357,50 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 foreach (SailTextures.Entry entry in SailTextures.Entries)
                 {
-                    AddTextureRow(entry.Hash, entry.Name, SailTextures.Get(entry.Hash));
+                    // A file the game can't use is listed (so the player knows why) but can't be picked.
+                    Texture2D texture = SailTextures.Get(entry.Hash);
+                    string problem = SailTextures.ProblemOf(entry.Hash);
+                    if (problem != null)
+                        AddTextureRow(entry.Hash, entry.Name + Tag(problem, "#E06A5A"), null, usable: false);
+                    else
+                        AddTextureRow(entry.Hash, entry.Name + StatusTag(entry.Hash), texture);
                 }
 
-                // The server's textures, after the player's own; one row per texture.
+                // The server's textures and other players', after the player's own; one row per
+                // texture.
                 foreach (CatalogEntry entry in SortedCatalog())
                 {
-                    if (SailTextures.IsLocal(entry.Hash)) continue;
-                    string label = $"{entry.Name} <size=75%><color=#B0B0B0>server</color></size>";
-                    AddTextureRow(entry.Hash, label, SailDownloads.Thumbnail(entry.Hash));
+                    if (SailTextures.IsLocal(entry.Hash) || !SailDownloads.MayShow(entry.Hash)) continue;
+                    AddTextureRow(entry.Hash, entry.Name + StatusTag(entry.Hash), SailDownloads.Thumbnail(entry.Hash));
                 }
                 SailDownloads.RequestThumbnails();
             }
 
             _catalogKey = CatalogKey();
-            _textureHint.text = TextureHint();
             RefreshTextureSelection();
         }
+
+        // Small grey text after a texture's name: where it comes from, or how sharing it went.
+        private static string StatusTag(string hash)
+        {
+            CatalogEntry entry = SailDownloads.Find(hash);
+            if (entry == null)
+            {
+                if (SailUploads.IsUploading(hash)) return Tag("sharing", "#B0B0B0");
+                return SailUploads.RefusalOf(hash) != null ? Tag("not shared", "#B0B0B0") : "";
+            }
+            if (entry.Source == TextureSource.Server) return Tag("server", "#B0B0B0");
+
+            string uploader = entry.Mine ? "" : Tag($"by {entry.UploaderName}", "#B0B0B0");
+            switch (entry.Status)
+            {
+                case TextureStatus.Pending: return uploader + Tag("pending", "#E8C547");
+                case TextureStatus.Denied: return uploader + Tag("denied", "#E06A5A");
+                default: return entry.Mine ? Tag("shared", "#8FC97A") : uploader;
+            }
+        }
+
+        private static string Tag(string text, string color) => $" <size=75%><color={color}>{text}</color></size>";
 
         private static List<CatalogEntry> SortedCatalog()
         {
@@ -375,15 +412,23 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static string CatalogKey()
         {
             var hashes = new List<string>();
-            foreach (CatalogEntry entry in SailDownloads.Catalog) hashes.Add(entry.Hash);
+            // Status included: an approval or denial changes the row's tag.
+            foreach (CatalogEntry entry in SailDownloads.Catalog) hashes.Add(entry.Hash + entry.Status);
             hashes.Sort(System.StringComparer.Ordinal);
-            return SailNetwork.Policy.AllowCustomTextures + ":" + string.Join(",", hashes);
+            return SailNetwork.Policy.AllowCustomTextures + ":" + Plugin.ShowOtherPlayersTextures.Value + ":" + string.Join(",", hashes);
         }
 
         // The panel is rebuilt with the Hud on every world load; drop the old one's listener.
         private void OnDestroy()
         {
             SailDownloads.Changed -= DownloadsChanged;
+            SailUploads.Changed -= UploadsChanged;
+        }
+
+        // An upload started, finished or was refused: its tag and the hint change.
+        private void UploadsChanged()
+        {
+            if (IsOpen) RebuildTextureRows();
         }
 
         // A new catalog rebuilds the list; a thumbnail arriving only fills in its row, so the
@@ -406,16 +451,68 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
         }
 
-        private static string TextureHint()
+        private string TextureHint()
         {
             if (!SailNetwork.Policy.AllowCustomTextures) return "This server doesn't allow custom sail textures.";
             if (SailNetwork.Mode == ServerMode.Vanilla) return "This server doesn't have Shipwright's Touch: custom sail textures show only for you.";
+            CatalogEntry entry = SailDownloads.Find(_textureHash);
+            bool local = SailTextures.IsLocal(_textureHash);
+            if (SailNetwork.Mode == ServerMode.Modded && (local || (entry != null && entry.Mine))) return SharingHint(_textureHash);
+            if (entry != null && !local) return CatalogHint(entry);
             return SailTextures.Entries.Count == 0
                 ? "Add PNG or JPG images to BepInEx/config/ShipwrightsTouch/sails"
                 : "Images from BepInEx/config/ShipwrightsTouch/sails";
         }
 
-        private void AddTextureRow(string hash, string label, Texture thumbnail)
+        // A texture from the server or another player.
+        private static string CatalogHint(CatalogEntry entry)
+        {
+            if (entry.Source == TextureSource.Server) return "From the server: everyone sees it.";
+            switch (entry.Status)
+            {
+                case TextureStatus.Pending: return $"Shared by {entry.UploaderName}, waiting for an admin's approval: only admins see it for now.";
+                case TextureStatus.Denied: return $"Shared by {entry.UploaderName}, denied by an admin.";
+                default: return $"Shared by {entry.UploaderName}: everyone sees it.";
+            }
+        }
+
+        // Who sees one of the player's own textures on this server, or what Apply will do with it.
+        private static string SharingHint(string hash)
+        {
+            CatalogEntry entry = SailDownloads.Find(hash);
+            if (entry != null && entry.Source == TextureSource.Server) return "The server has this texture too: everyone sees it.";
+            if (entry != null)
+            {
+                switch (entry.Status)
+                {
+                    case TextureStatus.Pending: return "Waiting for an admin's approval: until then only you see it.";
+                    case TextureStatus.Denied: return "An admin denied this texture: only you see it.";
+                    default: return "Shared: everyone sees this texture.";
+                }
+            }
+
+            if (SailUploads.IsUploading(hash)) return "Sharing it with the server...";
+            string refusal = SailUploads.RefusalOf(hash);
+            if (refusal != null) return $"Not shared: {refusal}. Only you see it.";
+
+            SailPolicy policy = SailNetwork.Policy;
+            if (!policy.AllowPlayerTextures) return "This server doesn't take player textures: only you see this one.";
+            if (!Plugin.ShareTextures.Value) return "Sharing is off in your settings: only you see this texture.";
+
+            int shared = SailDownloads.SharedCount();
+            if (shared >= policy.MaxTexturesPerPlayer) return $"Sharing {shared} of {policy.MaxTexturesPerPlayer}: this one stays visible only to you.";
+            string problem = SailUploads.LocalProblem(hash);
+            if (problem != null) return $"Won't be shared: {problem}. Only you'll see it.";
+            return policy.RequireApproval
+                ? $"Apply shares it ({shared} of {policy.MaxTexturesPerPlayer} used); an admin approves it first."
+                : $"Apply shares it with everyone ({shared} of {policy.MaxTexturesPerPlayer} used).";
+        }
+
+        private void AddTextureRow(
+            string hash,
+            string label,
+            Texture thumbnail,
+            bool usable = true)
         {
             var go = new GameObject($"Texture_{label}", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             go.transform.SetParent(_textureList, false);
@@ -432,6 +529,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             colors.selectedColor = colors.normalColor;
             button.colors = colors;
             button.onClick.AddListener(() => SelectTexture(hash));
+            button.interactable = usable;
 
             // Always created, so a thumbnail that arrives later can fill it in.
             RectTransform thumbRt = UIBuilder.MakeChildRect(go.transform, "Thumbnail");
@@ -481,6 +579,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 row.Background.color = row.Hash == _textureHash ? RowSelectedColor : RowColor;
             }
+            _textureHint.text = TextureHint();
         }
 
         // ── Colors ───────────────────────────────────────────────────────
