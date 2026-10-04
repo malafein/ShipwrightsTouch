@@ -52,6 +52,12 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
         }
 
+        // The sail's own texture, for showing "no custom texture" in the customization panel.
+        public static Texture VanillaTextureOf(Ship ship)
+        {
+            return s_parts.GetValue(ship, FindParts).Select(p => p.VanillaTexture).FirstOrDefault(t => t != null);
+        }
+
         // Every vanilla ship's sail is a MagicaCloth, and the cloth lists exactly the renderers it
         // drives (which leaves out e.g. the ropes under the drakkar's sail). Ships without one
         // (modded ships, placement ghosts if the cloth isn't set up yet) fall back to the name

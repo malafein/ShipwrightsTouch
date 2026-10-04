@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -18,10 +20,13 @@ namespace malafein.Valheim.ShipwrightsTouch
         public const string ZdoNameKey = "custom_ship_name";
         public const string ZdoStyleKey = "custom_sail_style";
         public const string ZdoTextureKey = "shipwrightstouch.sail_texture";
+        public const string ZdoColorKey = "shipwrightstouch.sail_color";
+
+        private const string ControlsSection = "Controls";
 
         public static ConfigEntry<bool> AllowShipDeconstruction;
         public static ConfigEntry<bool> AssignBuilderIdentity;
-        public static ConfigEntry<KeyboardShortcut> RenameShipKey;
+        public static ConfigEntry<KeyboardShortcut> CustomizeShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorPlacingKey;
 
@@ -34,22 +39,24 @@ namespace malafein.Valheim.ShipwrightsTouch
             AllowShipDeconstruction = Config.Bind("General", "AllowShipDeconstruction", false, "Allow deconstructing ships with the hammer (middle-mouse button).");
             AssignBuilderIdentity = Config.Bind("General", "AssignBuilderIdentity", true, "Automatically assign your character as the owner when constructing a ship, restricting modifications (renaming, recoloring, deconstruction) to yourself.");
 
-            RenameShipKey = Config.Bind(
-                "Controls",
-                "RenameShip",
+            MigrateRenameKey();
+
+            CustomizeShipKey = Config.Bind(
+                ControlsSection,
+                "CustomizeShip",
                 new KeyboardShortcut(KeyCode.E, KeyCode.LeftShift),
-                "Rename the ship you are looking at (rudder, seats, mast, or hull)."
+                "Open the customization panel (name, sail color, sail texture) for the ship you are looking at (rudder, seats, mast, or hull)."
             );
 
             SailColorShipKey = Config.Bind(
-                "Controls",
+                ControlsSection,
                 "ChangeSailColor",
-                new KeyboardShortcut(KeyCode.E, KeyCode.LeftAlt),
-                "Cycle the sail color of the ship you are looking at."
+                KeyboardShortcut.Empty,
+                "Quickly cycle the sail color of the ship you are looking at through the presets. Unbound by default; the customization panel covers it."
             );
 
             SailColorPlacingKey = Config.Bind(
-                "Controls",
+                ControlsSection,
                 "ChangeSailColorWhilePlacing",
                 new KeyboardShortcut(KeyCode.E),
                 "Cycle the sail color of a ship while placing it with the hammer."
@@ -59,7 +66,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             // nothing to interact with while placing. TabLeft/TabRight only act inside tabbed
             // menus, where Player.TakeInput() is false and none of our shortcuts run.
             Keybinds.Init(Config, "Use", "TabLeft", "TabRight");
-            Keybinds.Add(RenameShipKey);
+            Keybinds.Add(CustomizeShipKey);
             Keybinds.Add(SailColorShipKey);
 
             // Only active while placing a ship, so it can't collide with the other two.
@@ -73,11 +80,36 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 harmony.PatchAll();
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
                 Log.Error($"Failed to apply some patches: {e}");
             }
             Log.Info($"{ModName} loaded!");
+        }
+
+        // Up to 1.1.1 the panel's shortcut was "RenameShip". BepInEx keeps settings it has no
+        // binding for in a private orphan table and loads a key's value from there when it's
+        // bound, so moving the saved value to the new key before binding carries it over. The
+        // old key is dropped on the next save.
+        private void MigrateRenameKey()
+        {
+            try
+            {
+                var orphans = (Dictionary<ConfigDefinition, string>)AccessTools
+                    .Property(typeof(ConfigFile), "OrphanedEntries")
+                    .GetValue(Config, null);
+
+                var oldKey = new ConfigDefinition(ControlsSection, "RenameShip");
+                var newKey = new ConfigDefinition(ControlsSection, "CustomizeShip");
+                if (!orphans.TryGetValue(oldKey, out string value)) return;
+
+                orphans.Remove(oldKey);
+                if (!orphans.ContainsKey(newKey)) orphans[newKey] = value;
+            }
+            catch (Exception e)
+            {
+                Log.Warn($"Could not carry over the rename shortcut saved by an older version: {e.Message}");
+            }
         }
 
         public static bool CanModifyShip(Ship ship, out string ownerName)

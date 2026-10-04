@@ -68,7 +68,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 bool canModify = Plugin.CanModifyShip(ship, out _);
                 if (canModify)
                 {
-                    AppendPrompt(ref result, Plugin.RenameShipKey, NamingPatches.GetRenameTitle());
+                    AppendPrompt(ref result, Plugin.CustomizeShipKey, "Customize Ship");
                     AppendPrompt(ref result, Plugin.SailColorShipKey, "Change Sail Color");
                 }
 

@@ -45,6 +45,10 @@
       <HintPath>$(ValheimManaged)/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="gui_framework">
+      <HintPath>$(ValheimManaged)/gui_framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="MagicaClothV2">
       <HintPath>$(ValheimManaged)/MagicaClothV2.dll</HintPath>
       <Private>false</Private>

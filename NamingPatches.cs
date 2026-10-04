@@ -26,20 +26,6 @@ namespace malafein.Valheim.ShipwrightsTouch
             return null;
         }
 
-        internal static string GetRenameTitle()
-        {
-            try
-            {
-                string title = Localization.instance.Localize("$text_rename");
-                if (string.IsNullOrEmpty(title) || title.StartsWith("$") || title.ToLower().Contains("text_rename")) 
-                    return "Rename Ship";
-                return title;
-            }
-            catch { return "Rename Ship"; }
-        }
-
-
-
         // The rudder and seats are interactable, so vanilla reacts to the Use key itself (take
         // the helm, sit down). When one of our ship shortcuts is pressed over a ship part, cancel
         // that; the actions themselves run in the Player.Update postfixes, which treat every ship
@@ -50,7 +36,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             if (hold || go == null) return true;
 
-            if (!Keybinds.IsDown(Plugin.RenameShipKey.Value) && !Keybinds.IsDown(Plugin.SailColorShipKey.Value)) return true;
+            if (!Keybinds.IsDown(Plugin.CustomizeShipKey.Value) && !Keybinds.IsDown(Plugin.SailColorShipKey.Value)) return true;
 
             // Let containers handle their own interaction (opening storage/quick-stacking)
             if (go.GetComponentInParent<Container>() != null) return true;
@@ -63,7 +49,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static void Postfix_PlayerUpdate(Player __instance)
         {
             if (__instance != Player.m_localPlayer || TextInput.IsVisible()) return;
-            if (!Keybinds.IsDown(Plugin.RenameShipKey.Value) || !Keybinds.CanTakeInput(__instance)) return;
+            if (!Keybinds.IsDown(Plugin.CustomizeShipKey.Value) || !Keybinds.CanTakeInput(__instance)) return;
 
             GameObject hoverGO = __instance.GetHoverObject();
             if (hoverGO == null) return;
@@ -76,34 +62,11 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             if (Plugin.CanModifyShip(ship, out string ownerName))
             {
-                TextInput.instance.RequestText(new ShipNameTextReceiver(ship), GetRenameTitle(), 20);
+                CustomizePanel.Open(ship);
             }
             else
             {
-                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can rename this ship.");
-            }
-        }
-    
-        private class ShipNameTextReceiver : TextReceiver
-        {
-            private readonly Ship m_ship;
-            public ShipNameTextReceiver(Ship ship) => m_ship = ship;
-
-            public string GetText()
-            {
-                ZNetView nview = m_ship.GetComponent<ZNetView>();
-                return (nview != null && nview.IsValid()) ? nview.GetZDO().GetString(Plugin.ZdoNameKey) : "";
-            }
-
-            public void SetText(string text)
-            {
-                ZNetView nview = m_ship.GetComponent<ZNetView>();
-                if (nview != null && nview.IsValid())
-                {
-                    nview.GetZDO().Set(Plugin.ZdoNameKey, text);
-                }
-                // No synchronization to container ZDOs to avoid conflicts/duplication.
-                // Hover header is handled dynamically in ApplyNamingHover via ship lookup.
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can customize this ship.");
             }
         }
     }

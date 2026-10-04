@@ -1,7 +1,6 @@
 using HarmonyLib;
 using malafein.Valheim.Shared;
 using UnityEngine;
-using System.Collections.Generic;
 using BepInEx.Configuration;
 
 namespace malafein.Valheim.ShipwrightsTouch
@@ -10,27 +9,6 @@ namespace malafein.Valheim.ShipwrightsTouch
     public static class ColoringPatches
     {
         private static int m_selectedStyle = 0;
-        private const int MaxStyles = 6; 
-
-        private static readonly Color[] SailColors = new Color[]
-        {
-            Color.white,      // Default
-            Color.red,        // Red
-            Color.blue,       // Blue
-            Color.green,      // Green
-            Color.yellow,     // Yellow
-            new Color(0.2f, 0.2f, 0.2f) // Black/Dark
-        };
-
-        private static readonly string[] ColorNames = new string[]
-        {
-            "White",
-            "Red",
-            "Blue",
-            "Green",
-            "Yellow",
-            "Black"
-        };
 
         private static bool m_isPlacing = false;
 
@@ -50,8 +28,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             // Cycle the style with the configured key, only while taking input
             if (takeInput && Keybinds.IsDown(Plugin.SailColorPlacingKey.Value))
             {
-                m_selectedStyle = (m_selectedStyle + 1) % MaxStyles;
-                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[m_selectedStyle]}</color>");
+                m_selectedStyle = (m_selectedStyle + 1) % SailStyle.Presets.Length;
+                MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{SailStyle.PresetNames[m_selectedStyle]}</color>");
             }
         }
 
@@ -104,24 +82,31 @@ namespace malafein.Valheim.ShipwrightsTouch
             UpdateSailAppearance(__instance);
         }
 
-        private static void UpdateSailAppearance(Ship ship)
+        // While the customization panel is open on a ship, it shows the panel's unsaved choice
+        // instead of the stored one.
+        internal static void UpdateSailAppearance(Ship ship)
         {
+            if (CustomizePanel.TryGetPreview(ship, out Color previewColor, out Texture2D previewTexture))
+            {
+                SailAppearance.Apply(ship, previewColor, previewTexture);
+                return;
+            }
+
             ZNetView nview = ship.GetComponent<ZNetView>();
             if (nview == null || !nview.IsValid()) return;
 
             ZDO zdo = nview.GetZDO();
-            int style = zdo.GetInt(Plugin.ZdoStyleKey, 0);
-            if (style < 0 || style >= SailColors.Length) return;
+            if (!SailStyle.TryGetColor(zdo, out Color color)) return;
 
-            SailAppearance.Apply(ship, SailColors[style], SailTextures.Get(zdo.GetString(Plugin.ZdoTextureKey)));
+            SailAppearance.Apply(ship, color, SailTextures.Get(zdo.GetString(Plugin.ZdoTextureKey)));
         }
 
         // Placement ghosts have no ZDO; they preview the selected color only.
         private static void ApplyStyle(Ship ship, int style)
         {
-            if (style < 0 || style >= SailColors.Length) return;
+            if (style < 0 || style >= SailStyle.Presets.Length) return;
 
-            SailAppearance.Apply(ship, SailColors[style], null);
+            SailAppearance.Apply(ship, SailStyle.Presets[style], null);
         }
 
         [HarmonyPatch(typeof(Ship), "UpdateSail")]
@@ -158,11 +143,12 @@ namespace malafein.Valheim.ShipwrightsTouch
                 ZNetView nview = ship.GetComponent<ZNetView>();
                 if (nview != null && nview.IsValid())
                 {
+                    // A custom color counts as its nearest preset, so cycling continues from there.
                     int currentStyle = nview.GetZDO().GetInt(Plugin.ZdoStyleKey, 0);
-                    int nextStyle = (currentStyle + 1) % MaxStyles;
-                    nview.GetZDO().Set(Plugin.ZdoStyleKey, nextStyle);
+                    int nextStyle = (currentStyle + 1) % SailStyle.Presets.Length;
+                    SailStyle.SetPreset(nview.GetZDO(), nextStyle);
                     UpdateSailAppearance(ship);
-                    MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{ColorNames[nextStyle]}</color>");
+                    MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Color: <color=yellow>{SailStyle.PresetNames[nextStyle]}</color>");
                 }
             }
             else
