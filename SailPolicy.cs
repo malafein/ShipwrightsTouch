@@ -48,7 +48,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             AllowPlayerTexturesConfig = config.Bind(Section, "AllowPlayerSailTextures", true,
                 Describe("Allow players to share their own sail textures with everyone. When off, nothing new is shared: players still see their own textures on their own ships, everyone else sees the server's textures, textures approved earlier, or the vanilla sail."));
             RequireApprovalConfig = config.Bind(Section, "RequireApproval", true,
-                Describe("New player textures stay visible only to the player who shared them until an admin approves them. When off, they're shown to everyone right away; admins can still deny one later."));
+                Describe("New player textures stay visible only to the player who shared them until a moderator or admin approves them. When off, they're shown to everyone right away; moderators can still deny one later."));
             MaxFileKilobytesConfig = config.Bind(Section, "MaxTextureFileKB", 1024,
                 Describe("Largest texture file a player may share, in KB.",
                     new AcceptableValueRange<int>(64, SailTextures.MaxFileBytes / 1024)));

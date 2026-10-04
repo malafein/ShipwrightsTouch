@@ -1,3 +1,6 @@
+#if DEBUG
+using BepInEx.Configuration;
+#endif
 using HarmonyLib;
 using malafein.Valheim.Shared;
 using UnityEngine;
@@ -64,10 +67,52 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 CustomizePanel.Open(ship);
             }
+            else if (SailModeration.CanModerate && IsPlayerTexture(ship))
+            {
+                // Someone else's ship: a moderator can't customize it, but can moderate its texture.
+                ModerationPanel.Open(ship.GetComponent<ZNetView>().GetZDO().GetString(Plugin.ZdoTextureKey));
+            }
             else
             {
                 MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can customize this ship.");
             }
+        }
+
+#if DEBUG
+        // Test aid: gives the ship under the cursor a made-up owner, to test what other players'
+        // ships allow (e.g. moderating from a ship). Debug builds only; pressing it again on the
+        // same ship gives it back to the local player. No modifier: KDE takes Ctrl+F9 (window
+        // overview) and the game then misses the Ctrl release.
+        private static readonly KeyboardShortcut DebugFakeOwnerKey = new KeyboardShortcut(KeyCode.F9);
+        private const long DebugFakeOwnerId = 1L;
+
+        [HarmonyPatch(typeof(Player), "Update")]
+        [HarmonyPostfix]
+        private static void Postfix_PlayerUpdate_DebugFakeOwner(Player __instance)
+        {
+            if (__instance != Player.m_localPlayer || TextInput.IsVisible()) return;
+            if (!Keybinds.IsDown(DebugFakeOwnerKey) || !Keybinds.CanTakeInput(__instance)) return;
+
+            GameObject hoverGO = __instance.GetHoverObject();
+            Ship ship = hoverGO != null ? GetParentShip(hoverGO.GetComponent<Component>()) : null;
+            ZNetView nview = ship != null ? ship.GetComponent<ZNetView>() : null;
+            if (nview == null || !nview.IsValid()) return;
+
+            ZDO zdo = nview.GetZDO();
+            bool fake = zdo.GetLong(Plugin.ZdoOwnerIdKey, 0L) == DebugFakeOwnerId;
+            zdo.Set(Plugin.ZdoOwnerIdKey, fake ? __instance.GetPlayerID() : DebugFakeOwnerId);
+            zdo.Set(Plugin.ZdoOwnerNameKey, fake ? __instance.GetPlayerName() : "Bjorn");
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, fake ? "Debug: ship is yours again." : "Debug: ship now belongs to Bjorn.");
+        }
+#endif
+
+        // A texture that isn't one of the server's own: possibly shared by a player, so moderated.
+        private static bool IsPlayerTexture(Ship ship)
+        {
+            ZNetView nview = ship.GetComponent<ZNetView>();
+            if (nview == null || !nview.IsValid()) return false;
+            string hash = nview.GetZDO().GetString(Plugin.ZdoTextureKey);
+            return hash != "" && SailDownloads.Find(hash)?.Source != TextureSource.Server;
         }
     }
 }

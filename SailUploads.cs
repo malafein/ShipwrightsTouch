@@ -175,7 +175,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                     s_current = null;
                     Log.Info($"Shared sail texture {name} ({status}).");
                     ShowMessage(status == TextureStatus.Pending
-                        ? $"Sail texture {name} shared: waiting for an admin's approval."
+                        ? $"Sail texture {name} shared: waiting for approval."
                         : $"Sail texture {name} shared.");
                     break;
 

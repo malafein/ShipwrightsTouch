@@ -30,6 +30,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<KeyboardShortcut> CustomizeShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorShipKey;
         public static ConfigEntry<KeyboardShortcut> SailColorPlacingKey;
+        public static ConfigEntry<KeyboardShortcut> ModerationKey;
         public static ConfigEntry<float> ScrollSensitivity;
         public static ConfigEntry<bool> ShareTextures;
         public static ConfigEntry<bool> ShowOtherPlayersTextures;
@@ -44,7 +45,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             AssignBuilderIdentity = Config.Bind("General", "AssignBuilderIdentity", true, "Automatically assign your character as the owner when constructing a ship, restricting modifications (renaming, recoloring, deconstruction) to yourself.");
 
             ScrollSensitivity = Config.Bind("General", "ScrollSensitivity", UIBuilder.DefaultScrollSensitivity, "Mouse-wheel scroll speed in the customization panel's texture list. Higher scrolls faster. Applied each time the panel opens.");
-            ShareTextures = Config.Bind("Sharing", "ShareMyTextures", true, "On a server with this mod, share a texture from your sails folder with the server the first time you put it on a ship, so other players can see it (if the server allows it, possibly after an admin's approval). When off, your textures show only for you.");
+            ShareTextures = Config.Bind("Sharing", "ShareMyTextures", true, "On a server with this mod, share a texture from your sails folder with the server the first time you put it on a ship, so other players can see it (if the server allows it, possibly after a moderator's approval). When off, your textures show only for you.");
             ShowOtherPlayersTextures = Config.Bind("Sharing", "ShowOtherPlayersTextures", true, "Show and download the sail textures other players have shared on the server. When off, their ships show the vanilla sail to you. The server's own textures still show.");
 
             MigrateRenameKey();
@@ -70,12 +71,20 @@ namespace malafein.Valheim.ShipwrightsTouch
                 "Cycle the sail color of a ship while placing it with the hammer."
             );
 
+            ModerationKey = Config.Bind(
+                ControlsSection,
+                "OpenModeration",
+                KeyboardShortcut.Empty,
+                "Open the sail texture moderation panel (server moderators and admins only). Unbound by default; the customization panel has a button for it."
+            );
+
             // "Use" is cancelled by NamingPatches.Prefix_PlayerInteract over ship parts and has
             // nothing to interact with while placing. TabLeft/TabRight only act inside tabbed
             // menus, where Player.TakeInput() is false and none of our shortcuts run.
             Keybinds.Init(Config, "Use", "TabLeft", "TabRight");
             Keybinds.Add(CustomizeShipKey);
             Keybinds.Add(SailColorShipKey);
+            Keybinds.Add(ModerationKey);
 
             // Only active while placing a ship, so it can't collide with the other two.
             Keybinds.Add(SailColorPlacingKey, "Placing");

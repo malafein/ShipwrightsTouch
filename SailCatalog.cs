@@ -51,10 +51,14 @@ namespace malafein.Valheim.ShipwrightsTouch
         public bool Mine;
 
         // Server only, never sent: the uploader's platform ID, the upload's file in the uploads
-        // folder, and the day it arrived.
+        // folder, the day it arrived, and who last approved or denied it and when (moderators see
+        // those through ModerationEntry; the uploader never does).
         public string UploaderId = "";
         public string FileName = "";
         public string Date = "";
+        public string DecidedById = "";
+        public string DecidedByName = "";
+        public string DecidedDate = "";
 
         public bool CountsTowardLimit => Source == TextureSource.Player && Status != TextureStatus.Denied;
 

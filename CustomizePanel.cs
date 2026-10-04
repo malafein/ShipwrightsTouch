@@ -108,6 +108,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private RectTransform _textureList;
         private ScrollRect _textureScroll;
         private RectTransform _recentRow;
+        private Button _moderateButton;
 
         private readonly List<TextureRow> _textureRows = new List<TextureRow>();
         private readonly List<Swatch> _presetSwatches = new List<Swatch>();
@@ -186,6 +187,8 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             // Sail texture
             AddHeader("TextureHeader", "Sail texture", 166f);
+            _moderateButton = UIBuilder.AddButton(transform, "ModerateButton", "Moderate", OpenModeration, 14f);
+            PlaceBox((RectTransform)_moderateButton.transform, PanelWidth - Margin - 110f, 164f, 110f, 28f);
             RectTransform listBox = Place("TextureListBox", 196f, 250f);
             var listBackground = listBox.gameObject.AddComponent<Image>();
             listBackground.color = new Color(0f, 0f, 0f, 0.3f);
@@ -250,6 +253,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             RebuildTextureRows();
             _recentKey = null;
             RefreshOwner();
+            _moderateButton.gameObject.SetActive(SailModeration.CanModerate);
             RefreshColor();
 
             gameObject.SetActive(true);
@@ -314,6 +318,15 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 Close();
             }
+        }
+
+        // Moderators only: drops the unsaved choices and opens the moderation panel on the
+        // selected texture.
+        private void OpenModeration()
+        {
+            string hash = _textureHash;
+            Close();
+            ModerationPanel.Open(hash == "" ? null : hash);
         }
 
         // ── Owner ────────────────────────────────────────────────────────
@@ -470,8 +483,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (entry.Source == TextureSource.Server) return "From the server: everyone sees it.";
             switch (entry.Status)
             {
-                case TextureStatus.Pending: return $"Shared by {entry.UploaderName}, waiting for an admin's approval: only admins see it for now.";
-                case TextureStatus.Denied: return $"Shared by {entry.UploaderName}, denied by an admin.";
+                case TextureStatus.Pending: return $"Shared by {entry.UploaderName}, waiting for approval: only moderators see it for now.";
+                case TextureStatus.Denied: return $"Shared by {entry.UploaderName}, denied on this server.";
                 default: return $"Shared by {entry.UploaderName}: everyone sees it.";
             }
         }
@@ -485,8 +498,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 switch (entry.Status)
                 {
-                    case TextureStatus.Pending: return "Waiting for an admin's approval: until then only you see it.";
-                    case TextureStatus.Denied: return "An admin denied this texture: only you see it.";
+                    case TextureStatus.Pending: return "Waiting for approval: until then only you see it.";
+                    case TextureStatus.Denied: return "This texture was denied on this server: only you see it.";
                     default: return "Shared: everyone sees this texture.";
                 }
             }
@@ -504,7 +517,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             string problem = SailUploads.LocalProblem(hash);
             if (problem != null) return $"Won't be shared: {problem}. Only you'll see it.";
             return policy.RequireApproval
-                ? $"Apply shares it ({shared} of {policy.MaxTexturesPerPlayer} used); an admin approves it first."
+                ? $"Apply shares it ({shared} of {policy.MaxTexturesPerPlayer} used); a moderator approves it first."
                 : $"Apply shares it with everyone ({shared} of {policy.MaxTexturesPerPlayer} used).";
         }
 

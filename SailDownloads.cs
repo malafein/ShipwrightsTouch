@@ -80,10 +80,12 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // Asks the server for a texture in its catalog, unless it's already on its way. Cheap enough
-        // to call every frame for the same hash.
-        public static void Request(string hash)
+        // to call every frame for the same hash. A moderator may also fetch textures on the
+        // moderation list (for the panel's preview; ships still show only what MayShow allows).
+        public static void Request(string hash, bool forModeration = false)
         {
-            if (SailNetwork.Mode != ServerMode.Modded || !MayShow(hash)) return;
+            if (SailNetwork.Mode != ServerMode.Modded) return;
+            if (!MayShow(hash) && !(forModeration && SailModeration.Find(hash) != null)) return;
             if (s_downloads.TryGetValue(hash, out Download pending) && Time.time - pending.LastActivity < RetrySeconds) return;
 
             s_downloads[hash] = new Download { LastActivity = Time.time };
@@ -124,6 +126,18 @@ namespace malafein.Valheim.ShipwrightsTouch
                 if (!MayShow(hash) || SailTextures.IsLocal(hash)) continue;
                 if (!s_thumbnailsRequested.Contains(hash) && Thumbnail(hash) == null) missing.Add(hash);
             }
+            SendThumbnailRequest(missing);
+        }
+
+        // For the moderation panel: thumbnails of textures outside this player's catalog.
+        public static void RequestThumbnails(IEnumerable<string> hashes)
+        {
+            if (SailNetwork.Mode != ServerMode.Modded) return;
+            SendThumbnailRequest(hashes.Where(h => !s_thumbnailsRequested.Contains(h) && Thumbnail(h) == null).ToList());
+        }
+
+        private static void SendThumbnailRequest(List<string> missing)
+        {
             if (missing.Count == 0) return;
 
             var package = new ZPackage();
@@ -169,7 +183,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 string hash = package.ReadString();
                 byte[] png = package.ReadByteArray();
-                if (!s_catalog.ContainsKey(hash)) continue;
+                if (!s_catalog.ContainsKey(hash) && SailModeration.Find(hash) == null) continue;
 
                 Texture2D texture = LoadThumbnail(png);
                 if (texture == null) continue;
@@ -189,8 +203,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             byte[] data = package.ReadByteArray();
 
             if (!s_downloads.TryGetValue(hash, out Download download)) return;
-            CatalogEntry entry = Find(hash);
-            int maxChunks = entry != null ? entry.Bytes / 1024 + 2 : 0;
+            int bytes = Find(hash)?.Bytes ?? SailModeration.Find(hash)?.Bytes ?? 0;
+            int maxChunks = bytes / 1024 + 2;
             if (count <= 0 || count > maxChunks || index < 0 || index >= count) return;
 
             if (download.Chunks == null) download.Chunks = new byte[count][];

@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using BepInEx;
+using HarmonyLib;
 using malafein.Valheim.Shared;
 using UnityEngine;
 
@@ -26,7 +28,11 @@ namespace malafein.Valheim.ShipwrightsTouch
         private const float UploadTimeoutSeconds = 60f;
 
         private const string IndexFileName = "index.txt";
-        private const string IndexHeader = "# hash\tfile\tname\tstatus\tuploader id\tuploader name\tdate";
+        private const string IndexHeader = "# hash\tfile\tname\tstatus\tuploader id\tuploader name\tdate\tdecided by id\tdecided by name\tdecided date";
+
+        // Every ZDO the server holds, for counting the ships that use a texture. Private in ZDOMan.
+        private static readonly FieldInfo s_objectsById = AccessTools.Field(typeof(ZDOMan), "m_objectsByID");
+        private static readonly int s_textureKey = Plugin.ZdoTextureKey.GetStableHashCode();
 
         private class Transfer
         {
@@ -107,13 +113,13 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // What a peer may see: the server's textures and approved uploads; pending ones only by
-        // their uploader and admins; denied ones only by their uploader (to show the status).
+        // their uploader and moderators; denied ones only by their uploader (to show the status).
         private static List<CatalogEntry> VisibleTo(long peer)
         {
             if (!SailPolicy.AllowCustomTexturesConfig.Value) return new List<CatalogEntry>();
 
-            string viewerId = SailNetwork.PeerId(peer);
-            bool admin = SailNetwork.IsPeerAdmin(peer);
+            string viewerId = ServerRoles.PeerId(peer);
+            bool moderator = ServerRoles.PeerHas(peer, ServerRoles.Moderate);
             return s_entries.Values
                 .Where(e =>
                 {
@@ -121,7 +127,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                     switch (e.Status)
                     {
                         case TextureStatus.Approved: return true;
-                        case TextureStatus.Pending: return mine || admin;
+                        case TextureStatus.Pending: return mine || moderator;
                         default: return mine;
                     }
                 })
@@ -132,7 +138,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static void SendCatalog(long peer)
         {
             var package = new ZPackage();
-            CatalogEntry.WriteList(package, VisibleTo(peer), SailNetwork.PeerId(peer));
+            CatalogEntry.WriteList(package, VisibleTo(peer), ServerRoles.PeerId(peer));
             ZRoutedRpc.instance.InvokeRoutedRPC(peer, SailNetwork.CatalogRpc, package);
         }
 
@@ -164,9 +170,12 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static void RPC_GetThumbnails(long sender, ZPackage request)
         {
-            if (!SailNetwork.IsModdedPeer(sender)) return;
+            if (!FromModdedPeer(sender)) return;
 
+            // Moderators also get the textures only they review (others' denied ones).
             var visible = new HashSet<string>(VisibleTo(sender).Select(e => e.Hash));
+            if (ServerRoles.PeerHas(sender, ServerRoles.Moderate))
+                visible.UnionWith(s_entries.Values.Where(e => e.Source == TextureSource.Player).Select(e => e.Hash));
             int count = Math.Min(request.ReadInt(), 256);
             var reply = new ZPackage();
             var hashes = new List<string>();
@@ -187,8 +196,9 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static void RPC_GetTexture(long sender, string hash)
         {
-            if (!SailNetwork.IsModdedPeer(sender)) return;
-            if (!VisibleTo(sender).Any(e => e.Hash == hash) || !s_paths.TryGetValue(hash, out string path)) return;
+            if (!FromModdedPeer(sender)) return;
+            bool visible = VisibleTo(sender).Any(e => e.Hash == hash) || IsModeratedBy(sender, hash);
+            if (!visible || !s_paths.TryGetValue(hash, out string path)) return;
             if (s_transfers.Any(t => t.Peer == sender && t.Hash == hash)) return;
 
             byte[] data;
@@ -343,7 +353,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Source = TextureSource.Player,
                 Status = SailPolicy.RequireApprovalConfig.Value ? TextureStatus.Pending : TextureStatus.Approved,
                 UploaderName = IndexField(peer?.m_playerName),
-                UploaderId = SailNetwork.PeerId(sender),
+                UploaderId = ServerRoles.PeerId(sender),
                 FileName = fileName,
                 Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 Width = width,
@@ -355,7 +365,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             s_paths[hash] = path;
             SaveIndex();
 
-            Log.Info($"{SailNetwork.PeerName(sender)} shared sail texture {fileName} ({entry.Status}).");
+            Log.Info($"{ServerRoles.PeerName(sender)} shared sail texture {fileName} ({entry.Status}).");
             Answer(sender, hash, UploadAnswer.Shared, entry.Status);
             SendCatalogToAll();
         }
@@ -369,7 +379,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             if (s_entries.TryGetValue(hash, out CatalogEntry known))
             {
-                if (known.Status == TextureStatus.Denied) return "an admin denied it";
+                if (known.Status == TextureStatus.Denied) return "it was denied on this server";
                 existing = known;
                 return null;
             }
@@ -380,7 +390,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (size <= 0 || size > maxKilobytes * 1024) return $"it's over the server's {maxKilobytes} KB limit";
 
             int max = Math.Max(1, SailPolicy.MaxTexturesPerPlayerConfig.Value);
-            int shared = SharedCount(SailNetwork.PeerId(sender));
+            int shared = SharedCount(ServerRoles.PeerId(sender));
             if (shared >= max) return $"you're sharing {shared} of {max} textures already";
 
             return null;
@@ -432,7 +442,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             TextureStatus status = TextureStatus.Approved,
             string refusal = "")
         {
-            if (answer == UploadAnswer.Refused) Log.Info($"Refused sail texture {hash.Substring(0, 8)} from {SailNetwork.PeerName(peer)}: {refusal}.");
+            if (answer == UploadAnswer.Refused) Log.Info($"Refused sail texture {hash.Substring(0, 8)} from {ServerRoles.PeerName(peer)}: {refusal}.");
 
             var package = new ZPackage();
             package.Write(hash);
@@ -440,6 +450,182 @@ namespace malafein.Valheim.ShipwrightsTouch
             package.Write((byte)status);
             package.Write(refusal);
             ZRoutedRpc.instance.InvokeRoutedRPC(peer, SailNetwork.UploadAnswerRpc, package);
+        }
+
+        // ── Moderation ───────────────────────────────────────────────────
+
+        // A modded client, or this game itself when hosting (routed RPCs to its own ID arrive here).
+        private static bool FromModdedPeer(long sender)
+        {
+            ZNet net = ZNet.instance;
+            if (net == null || !net.IsServer()) return false;
+            return sender == ZNet.GetUID() || SailNetwork.IsModdedPeer(sender);
+        }
+
+        private static bool FromModerator(long sender, string request)
+        {
+            if (!FromModdedPeer(sender)) return false;
+            if (ServerRoles.PeerHas(sender, ServerRoles.Moderate)) return true;
+            Log.Info($"Refused {request} from {ServerRoles.PeerName(sender)}: not a moderator.");
+            return false;
+        }
+
+        // A player texture a moderator may look at in full, whatever its status.
+        private static bool IsModeratedBy(long peer, string hash)
+        {
+            return s_entries.TryGetValue(hash, out CatalogEntry entry)
+                && entry.Source == TextureSource.Player
+                && ServerRoles.PeerHas(peer, ServerRoles.Moderate);
+        }
+
+        // For a hosting moderator's preview: the file behind any player texture, denied included.
+        public static string ModerationPathOf(string hash)
+        {
+            ZNet net = ZNet.instance;
+            if (net == null || !net.IsServer() || hash == null) return null;
+            return s_paths.TryGetValue(hash, out string path) ? path : null;
+        }
+
+        public static void RPC_GetModeration(long sender)
+        {
+            if (FromModerator(sender, "a moderation list request")) SendModeration(sender);
+        }
+
+        public static void RPC_Moderate(long sender, ZPackage package)
+        {
+            if (!FromModerator(sender, "a sail texture decision")) return;
+
+            string hash = package.ReadString();
+            var action = (ModerationAction)package.ReadByte();
+            if (!s_entries.TryGetValue(hash, out CatalogEntry entry) || entry.Source != TextureSource.Player)
+            {
+                // Someone else removed it first; the fresh list shows that.
+                SendModeration(sender);
+                return;
+            }
+
+            switch (action)
+            {
+                case ModerationAction.Approve:
+                    if (!s_paths.ContainsKey(hash))
+                    {
+                        Log.Info($"Can't approve sail texture {entry.FileName}: the server no longer has its file.");
+                        SendModeration(sender);
+                        return;
+                    }
+                    Decide(entry, TextureStatus.Approved, sender);
+                    break;
+                case ModerationAction.Deny:
+                    Decide(entry, TextureStatus.Denied, sender);
+                    s_transfers.RemoveAll(t => t.Hash == hash);
+                    break;
+                case ModerationAction.Remove:
+                    Remove(entry);
+                    break;
+                default:
+                    return;
+            }
+
+            Log.Info($"{ServerRoles.PeerName(sender)}: {action} sail texture {entry.Name} ({entry.FileName}) by {entry.UploaderName}.");
+            SaveIndex();
+            SendCatalogToAll();
+            SendModerationToModerators();
+        }
+
+        private static void Decide(CatalogEntry entry, TextureStatus status, long moderator)
+        {
+            entry.Status = status;
+            entry.DecidedById = ServerRoles.PeerId(moderator);
+            entry.DecidedByName = IndexField(moderator == ZNet.GetUID() ? Player.m_localPlayer?.GetPlayerName() : ZNet.instance.GetPeer(moderator)?.m_playerName);
+            entry.DecidedDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        }
+
+        // Forgets an upload entirely: it frees the uploader's slot and may be shared again.
+        private static void Remove(CatalogEntry entry)
+        {
+            s_entries.Remove(entry.Hash);
+            s_thumbnails.Remove(entry.Hash);
+            s_paths.Remove(entry.Hash);
+            s_transfers.RemoveAll(t => t.Hash == entry.Hash);
+
+            string path = Path.Combine(UploadsFolder, entry.FileName);
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (IOException e)
+            {
+                Log.Warn($"Could not delete {path}: {e.Message}");
+            }
+        }
+
+        private static void SendModeration(long peer)
+        {
+            ZRoutedRpc.instance.InvokeRoutedRPC(peer, SailNetwork.ModerationRpc, ModerationPackage());
+        }
+
+        // The same list for every moderator; ShipsUsing walks every ZDO, so build it once.
+        private static void SendModerationToModerators()
+        {
+            List<long> peers = SailNetwork.ModdedPeers.Where(p => ServerRoles.PeerHas(p, ServerRoles.Moderate)).ToList();
+            if (!ZNet.instance.IsDedicated()) peers.Add(ZNet.GetUID());
+            if (peers.Count == 0) return;
+
+            ZPackage package = ModerationPackage();
+            foreach (long peer in peers) ZRoutedRpc.instance.InvokeRoutedRPC(peer, SailNetwork.ModerationRpc, package);
+        }
+
+        private static ZPackage ModerationPackage()
+        {
+            Dictionary<string, int> shipsUsing = ShipsUsing();
+            List<CatalogEntry> entries = s_entries.Values
+                .Where(e => e.Source == TextureSource.Player)
+                .OrderBy(e => e.Status == TextureStatus.Pending ? 0 : 1)
+                .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var package = new ZPackage();
+            package.Write(entries.Count);
+            foreach (CatalogEntry e in entries)
+            {
+                shipsUsing.TryGetValue(e.Hash, out int ships);
+                new ModerationEntry
+                {
+                    Hash = e.Hash,
+                    Name = e.Name,
+                    Status = e.Status,
+                    UploaderName = e.UploaderName,
+                    Date = e.Date,
+                    DecidedBy = e.DecidedByName,
+                    DecidedDate = e.DecidedDate,
+                    ShipsUsing = ships,
+                    Width = e.Width,
+                    Height = e.Height,
+                    Bytes = e.Bytes,
+                    HasImage = s_paths.ContainsKey(e.Hash)
+                }.Write(package);
+            }
+            return package;
+        }
+
+        // Ships (any ZDO) per texture hash, across the whole world the server holds.
+        private static Dictionary<string, int> ShipsUsing()
+        {
+            var counts = new Dictionary<string, int>();
+            if (!(s_objectsById?.GetValue(ZDOMan.instance) is Dictionary<ZDOID, ZDO> zdos))
+            {
+                Log.Warn("Could not read ZDOMan.m_objectsByID; ship counts show 0.");
+                return counts;
+            }
+
+            foreach (ZDO zdo in zdos.Values)
+            {
+                string hash = zdo.GetString(s_textureKey);
+                if (hash.Length == 0) continue;
+                counts.TryGetValue(hash, out int count);
+                counts[hash] = count + 1;
+            }
+            return counts;
         }
 
         // ── Upload index ─────────────────────────────────────────────────
@@ -481,12 +667,11 @@ namespace malafein.Valheim.ShipwrightsTouch
                     UploaderName = fields[5],
                     Date = fields[6]
                 };
-
-                // A denial is remembered without the image.
-                if (status == TextureStatus.Denied)
+                if (fields.Length >= 10)
                 {
-                    s_entries[hash] = entry;
-                    continue;
+                    entry.DecidedById = fields[7];
+                    entry.DecidedByName = fields[8];
+                    entry.DecidedDate = fields[9];
                 }
 
                 string path = Path.Combine(UploadsFolder, entry.FileName);
@@ -494,6 +679,13 @@ namespace malafein.Valheim.ShipwrightsTouch
                 byte[] thumbnail = bytes != null && SailTextures.HashOf(bytes) == hash
                     ? SailThumbnails.Make(bytes, out entry.Width, out entry.Height, out _)
                     : null;
+
+                // A denial is remembered even without its image (moderators then can't approve it).
+                if (thumbnail == null && status == TextureStatus.Denied)
+                {
+                    s_entries[hash] = entry;
+                    continue;
+                }
                 if (thumbnail == null)
                 {
                     Log.Warn($"Skipping uploaded sail texture {entry.FileName}: missing, changed or unreadable.");
@@ -516,7 +708,18 @@ namespace malafein.Valheim.ShipwrightsTouch
             text.Append(IndexHeader).Append('\n');
             foreach (CatalogEntry e in s_entries.Values.Where(e => e.Source == TextureSource.Player).OrderBy(e => e.Date).ThenBy(e => e.Name))
             {
-                text.Append(string.Join("\t", e.Hash, e.FileName, e.Name, e.Status, e.UploaderId, e.UploaderName, e.Date)).Append('\n');
+                text.Append(string.Join(
+                    "\t",
+                    e.Hash,
+                    e.FileName,
+                    e.Name,
+                    e.Status,
+                    e.UploaderId,
+                    e.UploaderName,
+                    e.Date,
+                    e.DecidedById,
+                    e.DecidedByName,
+                    e.DecidedDate)).Append('\n');
             }
             foreach (string line in s_unloadedIndexLines) text.Append(line).Append('\n');
 
