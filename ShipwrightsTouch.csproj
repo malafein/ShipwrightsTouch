@@ -37,6 +37,14 @@
       <HintPath>$(ValheimManaged)/assembly_utils.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ValheimManaged)/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ValheimManaged)/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="MagicaClothV2">
       <HintPath>$(ValheimManaged)/MagicaClothV2.dll</HintPath>
       <Private>false</Private>
