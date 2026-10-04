@@ -110,6 +110,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private readonly List<TextureRow> _textureRows = new List<TextureRow>();
         private readonly List<Swatch> _presetSwatches = new List<Swatch>();
         private readonly List<Swatch> _recentSwatches = new List<Swatch>();
+        private string _recentKey;
 
         // Unsaved choices, written to the ZDO on Apply.
         private string _textureHash = "";
@@ -229,7 +230,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             SailTextures.Refresh();
             RebuildTextureRows();
-            RebuildRecentSwatches();
+            _recentKey = null;
             RefreshOwner();
             RefreshColor();
 
@@ -421,12 +422,26 @@ namespace malafein.Valheim.ShipwrightsTouch
             return new Swatch { Color = color, Outline = outline };
         }
 
+        // The saved recent colors, led by the color being edited when it's a custom one not
+        // saved yet, so a typed color shows up here before Apply. Only rebuilt when that list
+        // changes, since the hex field calls this on every keystroke.
         private void RebuildRecentSwatches()
         {
+            var recent = new List<Color>(SailStyle.RecentColors);
+            string current = SailStyle.ToHex(_color);
+            if (SailStyle.PresetIndexOf(_color) < 0 && !recent.Exists(c => SailStyle.ToHex(c) == current))
+            {
+                recent.Insert(0, _color);
+                if (recent.Count > SailStyle.MaxRecentColors) recent.RemoveAt(recent.Count - 1);
+            }
+
+            string key = string.Join(",", recent.ConvertAll(SailStyle.ToHex));
+            if (key == _recentKey) return;
+            _recentKey = key;
+
             foreach (Transform child in _recentRow) Destroy(child.gameObject);
             _recentSwatches.Clear();
 
-            IReadOnlyList<Color> recent = SailStyle.RecentColors;
             for (int i = 0; i < recent.Count; i++)
             {
                 RectTransform rt = UIBuilder.MakeChildRect(_recentRow, $"Recent_{i}");
@@ -462,6 +477,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         private void RefreshSwatches()
         {
+            RebuildRecentSwatches();
             string selected = SailStyle.ToHex(_color);
             foreach (Swatch swatch in _presetSwatches) swatch.Outline.enabled = SailStyle.ToHex(swatch.Color) == selected;
             foreach (Swatch swatch in _recentSwatches) swatch.Outline.enabled = SailStyle.ToHex(swatch.Color) == selected;

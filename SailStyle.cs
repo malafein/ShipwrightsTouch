@@ -33,7 +33,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         };
 
         private const int NoCustomColor = -1;
-        private const int MaxRecentColors = 8;
+        public const int MaxRecentColors = 8;
 
         private static List<Color> s_recent;
 
