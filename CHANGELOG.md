@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.2.0] - 2026-10-05
 
 Custom sail textures, any sail color, and a new customization panel. Install the mod on your server too if you want to share textures with other players.
 
