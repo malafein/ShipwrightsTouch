@@ -33,7 +33,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 ### Manual Installation
 1. Install [BepInExPack Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/).
 2. Download the latest release of Shipwright's Touch from [GitHub](https://github.com/malafein/ShipwrightsTouch/releases).
-3. Extract `ShipwrightsTouch.dll` and the `ShipwrightsTouch-Sails` folder into your `<Valheim Install Folder>\BepInEx\plugins` directory.
+3. Extract the contents of the zip's `plugins` folder (`ShipwrightsTouch.dll` and the `ShipwrightsTouch-Sails` folder) into your `<Valheim Install Folder>\BepInEx\plugins` directory.
 
 **On a dedicated server**, install it the same way to share textures between players. Without the mod on the server, names and colors still work for everyone who has the mod, but custom textures show only to the player who chose them.
 
