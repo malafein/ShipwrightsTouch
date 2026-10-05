@@ -10,7 +10,8 @@ using UnityEngine;
 
 namespace malafein.Valheim.ShipwrightsTouch
 {
-    // Custom sail textures from the local folder. A texture is identified by the SHA-256 of its
+    // Custom sail textures from the local folder, and from ShipwrightsTouch-Sails folders under
+    // BepInEx/plugins (the ones bundled with this mod, and sail packs). A texture is identified by the SHA-256 of its
     // file bytes, never by file name: two players' red.png must not collide, and renaming a file
     // must not break the ships that use it. Ships store only the hash (Plugin.ZdoTextureKey).
     public static class SailTextures
@@ -39,6 +40,34 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static string Folder => System.IO.Path.Combine(Paths.ConfigPath, "ShipwrightsTouch", "sails");
 
+        // Folders with this name anywhere under BepInEx/plugins hold bundled sails: this mod's own
+        // and separately installed sail packs, which mod managers can only install into plugins.
+        public const string BundleFolderName = "ShipwrightsTouch-Sails";
+
+        // Found once per game run; mod managers only add plugins while the game is closed.
+        private static string[] s_bundleFolders;
+
+        private static IEnumerable<string> Folders()
+        {
+            yield return Folder;
+            if (s_bundleFolders == null)
+            {
+                try
+                {
+                    s_bundleFolders = Directory.GetDirectories(Paths.PluginPath, BundleFolderName, SearchOption.AllDirectories)
+                        .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    Log.Warn($"Could not look for bundled sails under {Paths.PluginPath}: {e.Message}");
+                    s_bundleFolders = new string[0];
+                }
+                foreach (string folder in s_bundleFolders) Log.Info($"Using bundled sail textures from {folder}");
+            }
+            foreach (string folder in s_bundleFolders) yield return folder;
+        }
+
         public static IReadOnlyList<Entry> Entries => s_entries;
 
         // Rescans the folder. Cheap enough to call whenever the player opens a texture choice, so
@@ -49,7 +78,9 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             s_entries.Clear();
             s_byHash.Clear();
-            foreach (string path in Directory.GetFiles(Folder).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            // The player's own folder first: a file also bundled keeps the player's name for it.
+            IEnumerable<string> files = Folders().SelectMany(f => Directory.GetFiles(f).OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
+            foreach (string path in files)
             {
                 if (!Extensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant())) continue;
 
@@ -72,7 +103,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 s_entries.Add(entry);
                 s_byHash[hash] = entry;
             }
-            Log.Debug($"Found {s_entries.Count} sail texture(s) in {Folder}");
+            Log.Debug($"Found {s_entries.Count} sail texture(s) in {Folder} and bundled folders");
         }
 
         // Returns the texture for a hash, loading it on first use, or null if this client doesn't

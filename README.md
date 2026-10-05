@@ -6,7 +6,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 
 - **Customization Panel:** Press `Left Shift + E` while looking at a ship (rudder, seats, mast, or hull) to open a panel where you name the ship, pick its sail color and sail texture, and choose who owns it. Changes preview live on the ship and are saved when you click Apply.
 - **Any Sail Color:** Pick a preset swatch or type any `#RRGGBB` color. Your last few custom colors are kept as swatches for next time. Press `E` while placing a ship with your Hammer to cycle the presets before it's built.
-- **Custom Sail Textures:** Put PNG or JPG images in your sails folder and choose them in the panel. The sail color tints the image; pick white to show it as-is.
+- **Custom Sail Textures:** Four historically inspired Viking sails are included, and you can add your own PNG or JPG images and choose them in the panel. The sail color tints the image; pick white to show it as-is.
 - **Sharing on Servers:** On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
 - **Moderation:** Server admins, and moderators they choose, review shared textures in an in-game panel: approve, deny, or remove them.
 - **Dynamic Hover Text:** The ship's name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
@@ -29,7 +29,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 ### Manual Installation
 1. Install [BepInExPack Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/).
 2. Download the latest release of Shipwright's Touch from [GitHub](https://github.com/malafein/ShipwrightsTouch/releases).
-3. Extract the `ShipwrightsTouch.dll` file into your `<Valheim Install Folder>\BepInEx\plugins` directory.
+3. Extract `ShipwrightsTouch.dll` and the `ShipwrightsTouch-Sails` folder into your `<Valheim Install Folder>\BepInEx\plugins` directory.
 
 **On a dedicated server**, install it the same way to share textures between players. Without the mod on the server, names and colors still work for everyone who has the mod, but custom textures show only to the player who chose them.
 
@@ -37,7 +37,16 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 
 ## Custom Sail Textures
 
-Put PNG or JPG images in `BepInEx/config/ShipwrightsTouch/sails` (the folder is created on first run) and pick them in the customization panel.
+### Included sails
+Four sails come with the mod, styled after what survives of real Viking sails, all woven wool sewn together from strips of cloth:
+- **Gokstad Stripes:** white wool with sewn-on red stripes, after the sail remnants found with the Gokstad ship.
+- **Gotland Lozenge** and **Gotland Checks:** diamond and chequered sails, as carved on the Gotland picture stones.
+- **Plain Wadmal:** undyed wool (*vaðmál*), the everyday sailcloth.
+
+On a server with this mod they're the server's own textures: everyone sees them, no download or approval needed. Sail packs installed with a mod manager work the same way: any `ShipwrightsTouch-Sails` folder under `BepInEx/plugins` is used.
+
+### Your own sails
+Put PNG or JPG images in `BepInEx/config/ShipwrightsTouch/sails` (the folder is created on first run) and pick them in the customization panel. Keep your own images here, not under `plugins`: mod managers replace a mod's plugin folder when it updates.
 
 - The image is stretched to fill the sail, on every ship type. Square images work well.
 - Up to 2048×2048 pixels and 4 MB. Servers may set lower limits for shared textures (1024×1024 and 1 MB by default).
