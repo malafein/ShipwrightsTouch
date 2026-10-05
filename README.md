@@ -6,7 +6,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 
 - **Customization Panel:** Press `Left Shift + E` while looking at a ship (rudder, seats, mast, or hull) to open a panel where you name the ship, pick its sail color and sail texture, and choose who owns it. Changes preview live on the ship and are saved when you click Apply.
 - **Any Sail Color:** Pick a preset swatch or type any `#RRGGBB` color. Your last few custom colors are kept as swatches for next time. Press `E` while placing a ship with your Hammer to cycle the presets before it's built.
-- **Custom Sail Textures:** Four historically inspired Viking sails are included, and you can add your own PNG or JPG images and choose them in the panel. The sail color tints the image; pick white to show it as-is.
+- **Custom Sail Textures:** Four historically inspired Viking Age sails are included, and you can add your own PNG or JPG images and choose them in the panel. The sail color tints the image; pick white to show it as-is.
 - **Sharing on Servers:** On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
 - **Moderation:** Server admins, and moderators they choose, review shared textures in an in-game panel: approve, deny, or remove them.
 - **Dynamic Hover Text:** The ship's name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
@@ -38,7 +38,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 ## Custom Sail Textures
 
 ### Included sails
-Four sails come with the mod, styled after what survives of real Viking sails, all woven wool sewn together from strips of cloth:
+Four sails come with the mod, styled after surviving Viking Age sails, all woven wool sewn together from strips of cloth:
 - **Gokstad Stripes:** white wool with sewn-on red stripes, after the sail remnants found with the Gokstad ship.
 - **Gotland Lozenge** and **Gotland Checks:** diamond and chequered sails, as carved on the Gotland picture stones.
 - **Plain Wadmal:** undyed wool (*vaðmál*), the everyday sailcloth.

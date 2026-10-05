@@ -7,7 +7,7 @@ Custom sail textures, any sail color, and a new customization panel. Install the
 ### New
 - **Customization Panel:** `Left Shift + E` on a ship now opens a panel for its name, sail color, sail texture, and owner. Changes preview live on the ship and are saved when you click Apply.
 - **Any Sail Color:** Pick a preset or type any `#RRGGBB` color. Your recent custom colors are kept as swatches.
-- **Custom Sail Textures:** Four historically inspired Viking sails are included. Add your own PNG or JPG images in `BepInEx/config/ShipwrightsTouch/sails` and choose them in the panel. The sail color tints the image.
+- **Custom Sail Textures:** Four historically inspired Viking Age sails are included. Add your own PNG or JPG images in `BepInEx/config/ShipwrightsTouch/sails` and choose them in the panel. The sail color tints the image.
 - **Sail Packs:** Any `ShipwrightsTouch-Sails` folder under `BepInEx/plugins` is used, so sail packs can be installed with a mod manager.
 - **Sharing:** On a server with this mod, a PNG texture you put on a ship is shared with the server, so everyone sees it. Server owners decide whether players may share, set size and count limits, and can require approval first. A server's own textures go in its `sails` folder.
 - **Moderation:** Admins, and moderators listed in the server's `moderators.txt`, approve, deny, or remove shared textures in an in-game moderation panel.
