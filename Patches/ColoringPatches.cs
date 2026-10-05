@@ -158,44 +158,5 @@ namespace malafein.Valheim.ShipwrightsTouch
                 MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Only {ownerName} can change this ship's sail color.");
             }
         }
-
-#if DEBUG
-        // Temporary way to try custom textures until the customization panel exists: cycles the
-        // hovered ship through the textures in SailTextures.Folder, then back to vanilla.
-        private static readonly KeyboardShortcut DebugCycleTextureKey = new KeyboardShortcut(KeyCode.Y, KeyCode.RightControl);
-
-        [HarmonyPatch(typeof(Player), "Update")]
-        [HarmonyPostfix]
-        private static void Postfix_PlayerUpdate_DebugTexture(Player __instance)
-        {
-            if (__instance != Player.m_localPlayer || TextInput.IsVisible()) return;
-            if (!Keybinds.IsDown(DebugCycleTextureKey) || !Keybinds.CanTakeInput(__instance)) return;
-
-            GameObject hoverGO = __instance.GetHoverObject();
-            if (hoverGO == null) return;
-
-            Ship ship = NamingPatches.GetParentShip(hoverGO.GetComponent<Component>());
-            if (ship == null || !Plugin.CanModifyShip(ship, out _)) return;
-
-            ZNetView nview = ship.GetComponent<ZNetView>();
-            if (nview == null || !nview.IsValid()) return;
-
-            SailTextures.Refresh();
-            var entries = SailTextures.Entries;
-            string current = nview.GetZDO().GetString(Plugin.ZdoTextureKey);
-            int index = -1;
-            for (int i = 0; i < entries.Count; i++)
-            {
-                if (entries[i].Hash == current) index = i;
-            }
-
-            string next = index + 1 < entries.Count ? entries[index + 1].Hash : "";
-            nview.GetZDO().Set(Plugin.ZdoTextureKey, next);
-            UpdateSailAppearance(ship);
-
-            string label = next == "" ? "Vanilla" : SailTextures.NameOf(next);
-            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, $"Sail Texture: <color=yellow>{label}</color> ({entries.Count} in folder)");
-        }
-#endif
     }
 }
