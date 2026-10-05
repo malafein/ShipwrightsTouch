@@ -468,6 +468,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         private string TextureHint()
         {
             if (!SailNetwork.Policy.AllowCustomTextures) return "This server doesn't allow custom sail textures.";
+            if (SailNetwork.ProtocolMismatch) return SailNetwork.MismatchText;
             if (SailNetwork.Mode == ServerMode.Vanilla) return "This server doesn't have Shipwright's Touch: custom sail textures show only for you.";
             CatalogEntry entry = SailDownloads.Find(_textureHash);
             bool local = SailTextures.IsLocal(_textureHash);

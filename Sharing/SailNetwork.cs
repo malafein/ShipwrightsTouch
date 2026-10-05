@@ -69,6 +69,18 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static ServerMode Mode { get; private set; } = ServerMode.Local;
 
+        // Client: the server's protocol version once it has answered, 0 until then (and for a
+        // vanilla server, which never answers).
+        public static int ServerProtocol { get; private set; }
+
+        // Client: the server runs the mod, but a version this game can't talk to.
+        public static bool ProtocolMismatch => ServerProtocol != 0 && ServerProtocol != ProtocolVersion;
+
+        // Client: the mismatch notice waits for the player to spawn (a message sent while the world
+        // loads is never seen), and shows once per session.
+        private static bool s_mismatchNoticePending;
+        private static bool s_mismatchNoticeShown;
+
         // The policy in effect for this game. Vanilla mode has no server policy: local only.
         public static SailPolicy Policy { get; private set; } = SailPolicy.Unrestricted;
 
@@ -88,6 +100,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             RestoreLocalValues();
             s_moddedPeers.Clear();
+            ServerProtocol = 0;
+            s_mismatchNoticePending = false;
+            s_mismatchNoticeShown = false;
             ServerRoles.StartSession(net);
 
             ZRoutedRpc rpc = ZRoutedRpc.instance;
@@ -155,9 +170,16 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (net == null || net.IsServer() || sender != net.GetServerPeer()?.m_uid) return;
 
             int serverProtocol = package.ReadInt();
+            bool firstReply = ServerProtocol == 0;
+            ServerProtocol = serverProtocol;
             if (serverProtocol != ProtocolVersion)
             {
+                // Policy is resent on every server config change: report the mismatch once.
+                if (!firstReply) return;
                 Log.Warn($"The server runs a different version of {Plugin.ModName} (protocol {serverProtocol}, this game {ProtocolVersion}). Custom sail textures stay visible only to you until both match.");
+                s_mismatchNoticePending = true;
+                ShowMismatchNotice();
+                Changed?.Invoke();
                 return;
             }
 
@@ -171,6 +193,21 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (firstAnswer) Log.Info($"The server runs {Plugin.ModName}; its sail texture settings apply.");
             Log.Debug($"Server sail policy: {Policy} settings={CanChangeSettings} moderate={ServerRoles.Has(ServerRoles.Moderate)}");
             Changed?.Invoke();
+        }
+
+        // What the player is told about a version mismatch. Protocol versions only go up, so the
+        // lower one is the older mod.
+        public static string MismatchText => ServerProtocol > ProtocolVersion
+            ? $"This server runs a newer {Plugin.ModName}: update yours to share sail textures here."
+            : $"This server runs an older {Plugin.ModName}: sail textures you choose show only for you.";
+
+        private static void ShowMismatchNotice()
+        {
+            if (!s_mismatchNoticePending || s_mismatchNoticeShown) return;
+            if (Player.m_localPlayer == null || MessageHud.instance == null) return;
+            s_mismatchNoticePending = false;
+            s_mismatchNoticeShown = true;
+            MessageHud.instance.ShowMessage(MessageHud.MessageType.Center, MismatchText);
         }
 
         // Asks a modded server for the current policy and catalog, so a panel opens on fresh
@@ -319,6 +356,15 @@ namespace malafein.Valheim.ShipwrightsTouch
             private static void Postfix_ZNetOnDestroy()
             {
                 RestoreLocalValues();
+            }
+
+            // The first moment a center message is actually seen; also runs on respawn, where the
+            // notice has already been shown.
+            [HarmonyPatch(typeof(Player), nameof(Player.OnSpawned))]
+            [HarmonyPostfix]
+            private static void Postfix_PlayerOnSpawned(Player __instance)
+            {
+                if (__instance == Player.m_localPlayer) ShowMismatchNotice();
             }
 
             [HarmonyPatch(typeof(ZRoutedRpc), nameof(ZRoutedRpc.RemovePeer))]

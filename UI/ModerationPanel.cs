@@ -40,6 +40,11 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Log.Warn("Moderation panel isn't built yet (Hud not awake).");
                 return;
             }
+            if (SailNetwork.ProtocolMismatch)
+            {
+                MessageHud.instance?.ShowMessage(MessageHud.MessageType.Center, SailNetwork.MismatchText);
+                return;
+            }
             if (SailNetwork.Mode != ServerMode.Modded)
             {
                 if (SailModeration.CanModerate) s_controller.Open(selectHash);
