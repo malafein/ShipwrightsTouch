@@ -21,6 +21,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             public string Hash;
             public string Name;
             public string Path;
+
+            // From a ShipwrightsTouch-Sails folder (included with the mod, or a sail pack), not the
+            // player's own folder.
+            public bool Bundled;
         }
 
         // Vanilla sails are 128-256 px, so this is generous; it bounds memory and, later, the
@@ -98,7 +102,8 @@ namespace malafein.Valheim.ShipwrightsTouch
                 {
                     Hash = hash,
                     Name = System.IO.Path.GetFileNameWithoutExtension(path),
-                    Path = path
+                    Path = path,
+                    Bundled = !System.IO.Path.GetDirectoryName(path).Equals(Folder, StringComparison.OrdinalIgnoreCase)
                 };
                 s_entries.Add(entry);
                 s_byHash[hash] = entry;
@@ -161,6 +166,8 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         public static bool IsLocal(string hash) => hash != null && s_byHash.ContainsKey(hash);
+
+        public static bool IsBundled(string hash) => hash != null && s_byHash.TryGetValue(hash, out Entry entry) && entry.Bundled;
 
         // Why a texture couldn't be loaded ("unreadable", "too large", ...), or null. Known once
         // Get has tried it.

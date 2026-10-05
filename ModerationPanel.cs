@@ -447,8 +447,8 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             _details.text = Details(entry);
 
-            _approve.interactable = entry.Status != TextureStatus.Approved && entry.HasImage;
-            _deny.interactable = entry.Status != TextureStatus.Denied;
+            SetEnabled(_approve, entry.Status != TextureStatus.Approved && entry.HasImage);
+            SetEnabled(_deny, entry.Status != TextureStatus.Denied);
             _removeLabel.text = _confirmRemove ? "Confirm" : "Remove";
         }
 
@@ -510,6 +510,14 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
             _previews[entry.Hash] = texture;
             return texture;
+        }
+
+        // The vanilla button style barely changes when disabled; a faded label makes it clear.
+        private static void SetEnabled(Button button, bool enabled)
+        {
+            button.interactable = enabled;
+            TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null) label.alpha = enabled ? 1f : 0.35f;
         }
 
         // ── Actions ──────────────────────────────────────────────────────

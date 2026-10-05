@@ -396,6 +396,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         // Small grey text after a texture's name: where it comes from, or how sharing it went.
         private static string StatusTag(string hash)
         {
+            if (SailTextures.IsBundled(hash)) return Tag("included", "#B0B0B0");
             CatalogEntry entry = SailDownloads.Find(hash);
             if (entry == null)
             {
@@ -470,6 +471,12 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (SailNetwork.Mode == ServerMode.Vanilla) return "This server doesn't have Shipwright's Touch: custom sail textures show only for you.";
             CatalogEntry entry = SailDownloads.Find(_textureHash);
             bool local = SailTextures.IsLocal(_textureHash);
+
+            // Every player with the mod has these, so a modded server lists them as its own.
+            if (SailTextures.IsBundled(_textureHash) && (entry == null || entry.Source == TextureSource.Server))
+                return SailNetwork.Mode == ServerMode.Modded
+                    ? "Included with Shipwright's Touch: everyone sees it."
+                    : "Included with Shipwright's Touch.";
             if (SailNetwork.Mode == ServerMode.Modded && (local || (entry != null && entry.Mine))) return SharingHint(_textureHash);
             if (entry != null && !local) return CatalogHint(entry);
             return SailTextures.Entries.Count == 0
