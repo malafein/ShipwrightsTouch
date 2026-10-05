@@ -2,6 +2,8 @@
 
 A Valheim mod that lets you name your ships, color their sails any color, and put your own images on them, shared with everyone on your server.
 
+![A longship under a chequered sail](https://raw.githubusercontent.com/malafein/ShipwrightsTouch/main/Assets/Screenshots/hero.jpg)
+
 ## Features
 
 - **Customization Panel:** Press `Left Shift + E` while looking at a ship (rudder, seats, mast, or hull) to open a panel where you name the ship, pick its sail color and sail texture, and choose who owns it. Changes preview live on the ship and are saved when you click Apply.
@@ -13,6 +15,8 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 - **Builder Identity & Restrictions:** When a ship is constructed, the builder is recorded as its owner. Only the owner can customize or deconstruct it; a ship made public can be customized by anyone. The owner's name is displayed in the hover text.
 - **Configurable Keybindings:** Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
 - **Mod Compatibility:** Designed to work alongside popular mods like `QuickStackStore`. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
+
+![The customization panel next to the ship it previews on](https://raw.githubusercontent.com/malafein/ShipwrightsTouch/main/Assets/Screenshots/preview.jpg)
 
 ## Installation
 
@@ -42,6 +46,8 @@ Four sails come with the mod, styled after surviving Viking Age sails, all woven
 - **Gokstad Stripes:** white wool with sewn-on red stripes, after the sail remnants found with the Gokstad ship.
 - **Gotland Lozenge** and **Gotland Checks:** diamond and chequered sails, as carved on the Gotland picture stones.
 - **Plain Wadmal:** undyed wool (*vaðmál*), the everyday sailcloth.
+
+<img src="https://raw.githubusercontent.com/malafein/ShipwrightsTouch/main/Assets/Screenshots/customize-panel.png" alt="The customization panel listing the included sails" width="360">
 
 On a server with this mod they're the server's own textures: everyone sees them, no download or approval needed. Sail packs installed with a mod manager work the same way: any `ShipwrightsTouch-Sails` folder under `BepInEx/plugins` is used.
 
@@ -85,6 +91,8 @@ Moderators open the moderation panel with the **OpenModeration** key (unbound by
 - **Remove:** deletes it from the server and frees the uploader's slot; it may be shared again.
 
 Uploaders only see a texture's status, never which moderator decided.
+
+<img src="https://raw.githubusercontent.com/malafein/ShipwrightsTouch/main/Assets/Screenshots/moderation.png" alt="The moderation panel with pending, approved and denied textures" width="640">
 
 ## Configuration
 
