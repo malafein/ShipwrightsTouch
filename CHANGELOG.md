@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1] - 2026-10-05
+
+### Fixes
+- **Included sails missing with mod managers:** r2modman and Thunderstore installed the four included sails without their folder, so the game never found them. Reinstalling or updating puts them back.
+- **Version mismatch notice:** joining a server that runs a different version of Shipwright's Touch now tells you so, and whether the server's or yours is newer. Sail sharing stays off until they match, as before.
+- Requires BepInExPack Valheim 5.4.2351.
+
 ## [1.2.0] - 2026-10-05
 
 Custom sail textures, any sail color, and a new customization panel. Install the mod on your server too if you want to share textures with other players.

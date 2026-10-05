@@ -1,9 +1,9 @@
 {
     "name": "ShipwrightsTouch",
-    "version_number": "1.2.0",
+    "version_number": "1.2.1",
     "website_url": "https://github.com/malafein/ShipwrightsTouch",
     "description": "Name your ships, color their sails any color, and add custom sail textures shared across your server, with moderation.",
     "dependencies": [
-        "denikson-BepInExPack_Valheim-5.4.2350"
+        "denikson-BepInExPack_Valheim-5.4.2351"
     ]
 }
