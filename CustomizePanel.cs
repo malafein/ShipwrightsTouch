@@ -241,7 +241,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             _textureHash = zdo.GetString(Plugin.ZdoTextureKey);
             SailStyle.TryGetColor(zdo, out _color);
             _ownerId = zdo.GetLong(Plugin.ZdoOwnerIdKey, 0L);
-            _ownerName = zdo.GetString(Plugin.ZdoOwnerNameKey);
+            _ownerName = Plugin.PlainText(zdo.GetString(Plugin.ZdoOwnerNameKey));
 
             if (_nameField != null) _nameField.SetTextWithoutNotify(zdo.GetString(Plugin.ZdoNameKey));
 

@@ -60,7 +60,10 @@ namespace malafein.Valheim.ShipwrightsTouch
         public string DecidedByName = "";
         public string DecidedDate = "";
 
-        public bool CountsTowardLimit => Source == TextureSource.Player && Status != TextureStatus.Denied;
+        // Denied ones too: their files stay on the server (so a denial can be undone), and
+        // otherwise a player could fill its disk by having upload after upload denied. A
+        // moderator's Remove frees the slot.
+        public bool CountsTowardLimit => Source == TextureSource.Player;
 
         public void Write(ZPackage package, string viewerId)
         {
@@ -83,7 +86,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Name = package.ReadString(),
                 Source = (TextureSource)package.ReadByte(),
                 Status = (TextureStatus)package.ReadByte(),
-                UploaderName = package.ReadString(),
+                UploaderName = Plugin.PlainText(package.ReadString()),
                 Width = package.ReadInt(),
                 Height = package.ReadInt(),
                 Bytes = package.ReadInt(),

@@ -149,6 +149,20 @@ namespace malafein.Valheim.ShipwrightsTouch
                 return null;
             }
 
+            // Checked before decoding (see SailThumbnails.TryReadSize).
+            if (!SailThumbnails.TryReadSize(bytes, out int claimedWidth, out int claimedHeight))
+            {
+                Log.Warn($"Could not read sail texture {entry.Name}: not a valid PNG or JPG.");
+                problem = "unreadable";
+                return null;
+            }
+            if (claimedWidth > MaxDimension || claimedHeight > MaxDimension)
+            {
+                Log.Warn($"Skipping sail texture {entry.Name}: {claimedWidth}x{claimedHeight} is over the {MaxDimension}x{MaxDimension} limit.");
+                problem = $"over {MaxDimension}x{MaxDimension}";
+                return null;
+            }
+
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true);
             if (!texture.LoadImage(bytes))
             {
@@ -172,7 +186,19 @@ namespace malafein.Valheim.ShipwrightsTouch
             texture.anisoLevel = 4;
 
             // Mipmaps are generated on upload; dropping the CPU copy halves the memory cost.
-            texture.Apply(true, true);
+            // Compressed (block-compressed like the game's own textures) it takes about a quarter
+            // of the video memory, at the cost of a one-time step on load and slight artifacts on
+            // hard edges and smooth gradients. Block compression needs sizes in multiples of 4.
+            if (Plugin.CompressTextures.Value && texture.width % 4 == 0 && texture.height % 4 == 0)
+            {
+                texture.Apply(true, false);
+                texture.Compress(true);
+                texture.Apply(false, true);
+            }
+            else
+            {
+                texture.Apply(true, true);
+            }
             return texture;
         }
 

@@ -23,6 +23,20 @@ namespace malafein.Valheim.ShipwrightsTouch
             error = null;
             sourceWidth = 0;
             sourceHeight = 0;
+
+            // Never decode an image whose header claims a huge size: a small file can describe
+            // gigabytes of pixels.
+            if (!TryReadSize(imageBytes, out int claimedWidth, out int claimedHeight))
+            {
+                error = "not a valid PNG or JPG";
+                return null;
+            }
+            if (claimedWidth > SailTextures.MaxDimension || claimedHeight > SailTextures.MaxDimension)
+            {
+                error = $"{claimedWidth}x{claimedHeight} is over the {SailTextures.MaxDimension}x{SailTextures.MaxDimension} limit";
+                return null;
+            }
+
             var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             Texture2D thumbnail = null;
             try
@@ -95,6 +109,49 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
             if (a == 0) return new Color32(0, 0, 0, 0);
             return new Color32((byte)(r / a), (byte)(g / a), (byte)(b / a), (byte)(a / count));
+        }
+
+        // An image's size from its header alone, without decoding it: PNG's IHDR chunk, or a JPEG
+        // start-of-frame marker. False if it's neither or the header is cut short.
+        public static bool TryReadSize(byte[] bytes, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+            if (bytes == null) return false;
+
+            // PNG: 8-byte signature, then the IHDR chunk (length, "IHDR", width, height).
+            if (bytes.Length >= 24 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
+                && bytes[12] == 0x49 && bytes[13] == 0x48 && bytes[14] == 0x44 && bytes[15] == 0x52)
+            {
+                width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+                height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+                return width > 0 && height > 0;
+            }
+
+            // JPEG: walk the markers to the first start-of-frame (SOF0..SOF15, except DHT, JPG and
+            // DAC, which share the range).
+            if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return false;
+            int i = 2;
+            while (i + 9 < bytes.Length)
+            {
+                if (bytes[i] != 0xFF) return false;
+                byte marker = bytes[i + 1];
+                if (marker == 0xFF)
+                {
+                    i++;
+                    continue;
+                }
+                int length = (bytes[i + 2] << 8) | bytes[i + 3];
+                if (marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC)
+                {
+                    height = (bytes[i + 5] << 8) | bytes[i + 6];
+                    width = (bytes[i + 7] << 8) | bytes[i + 8];
+                    return width > 0 && height > 0;
+                }
+                if (marker == 0xDA || length < 2) return false;
+                i += 2 + length;
+            }
+            return false;
         }
     }
 }

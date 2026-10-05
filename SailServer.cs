@@ -352,7 +352,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Name = upload.Name,
                 Source = TextureSource.Player,
                 Status = SailPolicy.RequireApprovalConfig.Value ? TextureStatus.Pending : TextureStatus.Approved,
-                UploaderName = IndexField(peer?.m_playerName),
+                UploaderName = IndexField(Plugin.PlainText(peer?.m_playerName)),
                 UploaderId = ServerRoles.PeerId(sender),
                 FileName = fileName,
                 Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
@@ -409,6 +409,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             height = 0;
             extension = ImageExtension(bytes);
             if (extension == null) return "it isn't a PNG or JPG file";
+
+            // JPGs from phones and cameras can carry where the photo was taken; shared files go to
+            // every player byte for byte, so only PNGs are shared. JPGs still work locally.
+            if (extension != ".png") return "only PNG images can be shared";
 
             thumbnail = SailThumbnails.Make(bytes, out width, out height, out string error);
             if (thumbnail == null) return "the server couldn't read the image";
@@ -536,7 +540,8 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             entry.Status = status;
             entry.DecidedById = ServerRoles.PeerId(moderator);
-            entry.DecidedByName = IndexField(moderator == ZNet.GetUID() ? Player.m_localPlayer?.GetPlayerName() : ZNet.instance.GetPeer(moderator)?.m_playerName);
+            string name = moderator == ZNet.GetUID() ? Player.m_localPlayer?.GetPlayerName() : ZNet.instance.GetPeer(moderator)?.m_playerName;
+            entry.DecidedByName = IndexField(Plugin.PlainText(name));
             entry.DecidedDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
         }
 

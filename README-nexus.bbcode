@@ -1,19 +1,21 @@
 [size=5][b]Shipwright's Touch[/b][/size]
 
-A Valheim mod that lets you name your ships and customize sail colors.
+A Valheim mod that lets you name your ships, color their sails any color, and put your own images on them, shared with everyone on your server.
 
 [line]
 
 [size=4][b]Features[/b][/size]
 
 [list]
-[*][b]Ship Naming:[/b] Rename your ships using [b]Left Shift + E[/b] while looking at the rudder, seats, mast, or hull.
-[*][b]Dynamic Hover Text:[/b] The ship's custom name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
-[*][b]Sail Coloring:[/b] Customize your ship's sail color during construction or afterwards. Press [b]E[/b] while placing a ship with your Hammer, or [b]Left Alt + E[/b] while looking at an existing ship.
+[*][b]Customization Panel:[/b] Press [b]Left Shift + E[/b] while looking at a ship (rudder, seats, mast, or hull) to open a panel where you name the ship, pick its sail color and sail texture, and choose who owns it. Changes preview live on the ship and are saved when you click Apply.
+[*][b]Any Sail Color:[/b] Pick a preset swatch or type any #RRGGBB color. Your last few custom colors are kept as swatches for next time. Press [b]E[/b] while placing a ship with your Hammer to cycle the presets before it's built.
+[*][b]Custom Sail Textures:[/b] Put PNG or JPG images in your sails folder and choose them in the panel. The sail color tints the image; pick white to show it as-is.
+[*][b]Sharing on Servers:[/b] On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
+[*][b]Moderation:[/b] Server admins, and moderators they choose, review shared textures in an in-game panel: approve, deny, or remove them.
+[*][b]Dynamic Hover Text:[/b] The ship's name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
+[*][b]Builder Identity & Restrictions:[/b] When a ship is constructed, the builder is recorded as its owner. Only the owner can customize or deconstruct it; a ship made public can be customized by anyone. The owner's name is displayed in the hover text.
 [*][b]Configurable Keybindings:[/b] Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
-[*][b]Builder Identity & Restrictions:[/b] When a ship is constructed, the builder's identity is recorded. Only the builder (owner) can rename, recolor, or deconstruct the ship. The owner's name is displayed in the hover text.
-[*][b]Mod Compatibility:[/b] Specifically designed to work alongside popular mods like QuickStackStore. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
-[*][b]Server Sync:[/b] Names, colors, and owners are stored in the ship's ZDO and synchronized across the server.
+[*][b]Mod Compatibility:[/b] Designed to work alongside popular mods like QuickStackStore. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
 [/list]
 
 [line]
@@ -39,7 +41,63 @@ A Valheim mod that lets you name your ships and customize sail colors.
 [*]Extract the ShipwrightsTouch.dll file into your Valheim install folder, under BepInEx\plugins.
 [/list]
 
+[b]On a dedicated server[/b], install it the same way to share textures between players. Without the mod on the server, names and colors still work for everyone who has the mod, but custom textures show only to the player who chose them.
+
 [quote][b]Compatibility:[/b] tested with Valheim 1.0.[/quote]
+
+[line]
+
+[size=4][b]Custom Sail Textures[/b][/size]
+
+Put PNG or JPG images in BepInEx/config/ShipwrightsTouch/sails (the folder is created on first run) and pick them in the customization panel.
+
+[list]
+[*]The image is stretched to fill the sail, on every ship type. Square images work well.
+[*]Up to 2048×2048 pixels and 4 MB. Servers may set lower limits for shared textures (1024×1024 and 1 MB by default).
+[*]Transparent areas show as holes in the sail.
+[*]The sail color tints the image: white shows it unchanged.
+[*]Only PNG images are shared with other players. JPG images work, but only on your own screen: photos can carry the location where they were taken, and shared files reach every player as they are.
+[*]Images are downloaded the first time a ship using them comes near, then cached in BepInEx/config/ShipwrightsTouch/cache.
+[/list]
+
+Each texture's status shows in the panel's list: [b]shared[/b] (everyone sees it), [b]pending[/b] (waiting for a moderator's approval; until then only you see it), or [b]denied[/b] (only you see it). If a texture can't be shared, the panel says why.
+
+[size=3][b]Sharing settings[/b][/size]
+[list]
+[*][b]ShareMyTextures:[/b] Set to false to keep your textures to yourself: they show only on your own screen.
+[*][b]ShowOtherPlayersTextures:[/b] Set to false to show other players' textures as the vanilla sail. The server's own textures still show.
+[/list]
+
+[line]
+
+[size=4][b]Server Setup[/b][/size]
+
+A server's own textures go in its BepInEx/config/ShipwrightsTouch/sails folder; every player sees them, no approval needed. Textures shared by players are kept in BepInEx/config/ShipwrightsTouch/uploads.
+
+The settings in the Server section apply when your game is the server (a dedicated server, or you hosting). While connected to a server with this mod, they show the server's values, and its admins can change them live from Configuration Manager.
+
+[list]
+[*][b]AllowCustomSailTextures:[/b] Set to false to turn custom textures off for everyone, including a player's own textures on their own screen.
+[*][b]AllowPlayerSailTextures:[/b] Set to false to stop new sharing. Textures approved earlier stay visible.
+[*][b]RequireApproval:[/b] true (default) keeps a new texture visible only to its uploader until a moderator approves it. When false, it's shown to everyone right away; moderators can still deny it later.
+[*][b]MaxTextureFileKB:[/b] Largest file a player may share. Default 1024.
+[*][b]MaxTextureSize:[/b] Largest width or height a player may share, in pixels. Default 1024.
+[*][b]MaxTexturesPerPlayer:[/b] How many textures each player may share, denied ones included (a moderator's Remove frees a slot). Default 10.
+[/list]
+
+[size=3][b]Moderation[/b][/size]
+
+Admins (the server's adminlist.txt) can moderate, and so can [b]moderators[/b]: players listed in the server's BepInEx/config/ShipwrightsTouch/moderators.txt, one player ID per line, written the same way as in adminlist.txt. Moderators get only sail moderation, not the admin console, kick, or ban. The file is created the first time the server checks it, and changes take effect within about 10 seconds, without a restart.
+
+Moderators open the moderation panel with the [b]OpenModeration[/b] key (unbound by default), with the Moderate button in the customization panel, or by pressing [b]Left Shift + E[/b] on another player's ship that uses a shared texture. The panel lists every shared texture, pending ones first, with a full-size preview, who shared it, how many ships use it, and who last approved or denied it.
+
+[list]
+[*][b]Approve:[/b] everyone sees it.
+[*][b]Deny:[/b] ships using it show the vanilla sail to everyone but its uploader, and it can't be shared again. Approving it later undoes this.
+[*][b]Remove:[/b] deletes it from the server and frees the uploader's slot; it may be shared again.
+[/list]
+
+Uploaders only see a texture's status, never which moderator decided.
 
 [line]
 
@@ -50,14 +108,17 @@ The mod generates a configuration file at BepInEx/config/com.malafein.shipwright
 [size=3][b]General[/b][/size]
 [list]
 [*][b]AssignBuilderIdentity:[/b] Set to true (default) to assign your character as the owner when constructing a ship, restricting modifications to yourself.
-[*][b]AllowShipDeconstruction:[/b] Set to true to allow removing ships with the hammer tool.
+[*][b]AllowShipDeconstruction:[/b] Set to true to allow removing ships with the hammer tool. Off by default, and we suggest leaving it off: the hammer's remove action takes a ship apart in one click, even one you're sailing, and anything aboard that isn't in a container can be lost. Somewhere at the bottom of the sea lies a growing pile of iron nails. Don't add to it.
+[*][b]ScrollSensitivity:[/b] Mouse-wheel scroll speed in the panels' lists.
+[*][b]CompressTextures:[/b] true (default) stores custom sail textures compressed in video memory, like the game's own textures: about a quarter of the memory each, with slight artifacts on hard edges and smooth gradients. Turn it off for exact images if your graphics card has memory to spare.
 [/list]
 
 [size=3][b]Controls[/b][/size]
 [list]
-[*][b]RenameShip:[/b] Rename the ship you are looking at. Default [b]Left Shift + E[/b].
-[*][b]ChangeSailColor:[/b] Cycle the sail color of the ship you are looking at. Default [b]Left Alt + E[/b].
+[*][b]CustomizeShip:[/b] Open the customization panel for the ship you are looking at. Default [b]Left Shift + E[/b]. (Called RenameShip in 1.1.1 and earlier; your saved key carries over.)
+[*][b]ChangeSailColor:[/b] Quickly cycle the sail color presets of the ship you are looking at. Unbound by default.
 [*][b]ChangeSailColorWhilePlacing:[/b] Cycle the sail color while placing a ship with the Hammer. Default [b]E[/b].
+[*][b]OpenModeration:[/b] Open the moderation panel (moderators and admins only). Unbound by default.
 [/list]
 
 Left and right Shift, Ctrl, and Alt are separate keys, as they are in the game. Plain [b]E[/b] still works as normal on a ship: it takes the helm or sits you down.
@@ -69,9 +130,8 @@ If one of these keybindings is also bound to a game action, a warning is written
 [size=4][b]Technical Details[/b][/size]
 
 [list]
-[*]Uses Harmony for patching Player, Ship, Container, Chair, ShipControlls, HoverText, and ZInput.
-[*]Custom data is stored in ZDO keys: custom_ship_name, custom_sail_style, shipwrightstouch.builder_id, and shipwrightstouch.builder_name.
-[*]Interaction logic is precisely focused to avoid conflict with container-specific mods.
+[*]Custom data is stored in ZDO keys: custom_ship_name, custom_sail_style, shipwrightstouch.sail_color, shipwrightstouch.sail_texture, shipwrightstouch.builder_id, and shipwrightstouch.builder_name.
+[*]A ship stores only its texture's hash (SHA-256); the image itself travels from the server on demand.
 [/list]
 
 [size=4][b]License & Development[/b][/size]

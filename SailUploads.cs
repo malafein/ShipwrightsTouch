@@ -97,6 +97,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             SailTextures.Entry entry = SailTextures.Entries.FirstOrDefault(e => e.Hash == hash);
             if (entry == null) return null;
 
+            // See SailServer.CheckImage.
+            string extension = Path.GetExtension(entry.Path).ToLowerInvariant();
+            if (extension == ".jpg" || extension == ".jpeg") return "only PNG images can be shared";
+
             SailPolicy policy = SailNetwork.Policy;
             long size = new FileInfo(entry.Path).Length;
             if (size > policy.MaxFileKilobytes * 1024L) return $"it's over the server's {policy.MaxFileKilobytes} KB limit";

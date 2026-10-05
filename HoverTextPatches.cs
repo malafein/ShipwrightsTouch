@@ -49,8 +49,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             ZNetView nview = ship.GetComponent<ZNetView>();
             if (nview == null || !nview.IsValid()) return;
 
-            string shipName = nview.GetZDO().GetString(Plugin.ZdoNameKey);
-            string builderName = nview.GetZDO().GetString(Plugin.ZdoOwnerNameKey);
+            string shipName = Plugin.PlainText(nview.GetZDO().GetString(Plugin.ZdoNameKey));
+            string builderName = Plugin.PlainText(nview.GetZDO().GetString(Plugin.ZdoOwnerNameKey));
             
             if (!string.IsNullOrEmpty(shipName))
             {

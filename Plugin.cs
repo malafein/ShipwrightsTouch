@@ -32,6 +32,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<KeyboardShortcut> SailColorPlacingKey;
         public static ConfigEntry<KeyboardShortcut> ModerationKey;
         public static ConfigEntry<float> ScrollSensitivity;
+        public static ConfigEntry<bool> CompressTextures;
         public static ConfigEntry<bool> ShareTextures;
         public static ConfigEntry<bool> ShowOtherPlayersTextures;
 
@@ -45,6 +46,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             AssignBuilderIdentity = Config.Bind("General", "AssignBuilderIdentity", true, "Automatically assign your character as the owner when constructing a ship, restricting modifications (renaming, recoloring, deconstruction) to yourself.");
 
             ScrollSensitivity = Config.Bind("General", "ScrollSensitivity", UIBuilder.DefaultScrollSensitivity, "Mouse-wheel scroll speed in the customization panel's texture list. Higher scrolls faster. Applied each time the panel opens.");
+            CompressTextures = Config.Bind("General", "CompressTextures", true, "Compress custom sail textures in video memory, like the game's own textures: about a quarter of the memory each, with slight artifacts on hard edges and smooth gradients. Turn off for exact images if you have memory to spare. Applies to textures loaded after the change (rejoin the world to reload them).");
             ShareTextures = Config.Bind("Sharing", "ShareMyTextures", true, "On a server with this mod, share a texture from your sails folder with the server the first time you put it on a ship, so other players can see it (if the server allows it, possibly after a moderator's approval). When off, your textures show only for you.");
             ShowOtherPlayersTextures = Config.Bind("Sharing", "ShowOtherPlayersTextures", true, "Show and download the sail textures other players have shared on the server. When off, their ships show the vanilla sail to you. The server's own textures still show.");
 
@@ -131,6 +133,14 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
         }
 
+        // Text another player chose (player and ship names), made safe to show in rich text: a
+        // name like "Bjorn <color=green>approved" must not restyle what follows it.
+        public static string PlainText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return text.Replace("<", "").Replace(">", "");
+        }
+
         public static bool CanModifyShip(Ship ship, out string ownerName)
         {
             ownerName = string.Empty;
@@ -140,8 +150,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (nview == null || !nview.IsValid()) return true;
 
             long ownerId = nview.GetZDO().GetLong(ZdoOwnerIdKey, 0L);
-            ownerName = nview.GetZDO().GetString(ZdoOwnerNameKey);
-            
+            ownerName = PlainText(nview.GetZDO().GetString(ZdoOwnerNameKey));
+
             return ownerId == 0L || ownerId == Player.m_localPlayer?.GetPlayerID();
         }
     }
