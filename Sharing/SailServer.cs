@@ -746,16 +746,26 @@ namespace malafein.Valheim.ShipwrightsTouch
             return (value ?? "").Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
         }
 
-        // One chunk per transfer per frame, and only while that peer's connection has room. Also
-        // drops uploads that stopped arriving.
+        // At most one chunk per peer per frame, only while that peer's connection has room and
+        // within MaxTransferKBPerSecond. Also drops uploads that stopped arriving.
         private static IEnumerator Pump()
         {
             while (true)
             {
                 foreach (long peer in s_uploads.Where(u => Time.time - u.Value.LastActivity > UploadTimeoutSeconds).Select(u => u.Key).ToList())
                 {
-                    Log.Debug($"Dropped an unfinished sail texture upload from peer {peer}.");
+                    string hash = s_uploads[peer].Hash;
                     s_uploads.Remove(peer);
+                    // Tells the uploader now, rather than after their remaining chunks and the
+                    // client's own answer timeout.
+                    if (ZNet.instance.GetPeer(peer) != null)
+                    {
+                        Answer(peer, hash, UploadAnswer.Refused, refusal: "the upload stalled");
+                    }
+                    else
+                    {
+                        Log.Debug($"Dropped an unfinished sail texture upload from peer {peer}.");
+                    }
                 }
 
                 for (int i = s_transfers.Count - 1; i >= 0; i--)
@@ -765,9 +775,10 @@ namespace malafein.Valheim.ShipwrightsTouch
                     if (peer == null)
                     {
                         s_transfers.RemoveAt(i);
+                        TransferPacing.Forget(transfer.Peer);
                         continue;
                     }
-                    if (peer.m_socket.GetSendQueueSize() > MaxQueuedBytes) continue;
+                    if (peer.m_socket.GetSendQueueSize() > MaxQueuedBytes || !TransferPacing.CanSend(transfer.Peer)) continue;
 
                     int offset = transfer.NextChunk * ChunkBytes;
                     int length = Math.Min(ChunkBytes, transfer.Data.Length - offset);
@@ -780,6 +791,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                     package.Write(transfer.ChunkCount);
                     package.Write(chunk);
                     ZRoutedRpc.instance.InvokeRoutedRPC(transfer.Peer, SailNetwork.TextureChunkRpc, package);
+                    TransferPacing.Sent(transfer.Peer, length);
 
                     if (++transfer.NextChunk >= transfer.ChunkCount) s_transfers.RemoveAt(i);
                 }

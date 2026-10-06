@@ -83,6 +83,7 @@ Each texture's status shows in the panel's list: [b]shared[/b] (everyone sees it
 [list]
 [*][b]ShareMyTextures:[/b] Set to false to keep your textures to yourself: they show only on your own screen.
 [*][b]ShowOtherPlayersTextures:[/b] Set to false to show other players' textures as the vanilla sail. The server's own textures still show.
+[*][b]MaxTransferKBPerSecond:[/b] A speed limit for sending textures, in KB per second: yours when you share one, the server's when it sends textures to players. 0 (the default) sends as fast as the connection allows. The game already limits each connection to 150 KB/s, shared with world updates, so a limit only slows transfers down to leave the world more room. Choices: 0, 8, 16, 32, 64 or 128; any other value counts as 0.
 [/list]
 
 [line]

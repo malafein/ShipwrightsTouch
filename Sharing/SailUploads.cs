@@ -205,8 +205,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             MessageHud.instance?.ShowMessage(MessageHud.MessageType.TopLeft, text);
         }
 
-        // One chunk per frame, only while the connection to the server has room, so the world
-        // keeps updating during an upload.
+        // One chunk per frame at most, only while the connection to the server has room and
+        // within MaxTransferKBPerSecond, so the world keeps updating during an upload.
         private static IEnumerator Pump()
         {
             while (true)
@@ -222,7 +222,8 @@ namespace malafein.Valheim.ShipwrightsTouch
                         StartNext();
                     }
                     else if (upload.NextChunk >= 0 && upload.NextChunk < upload.ChunkCount
-                             && server.m_socket.GetSendQueueSize() <= SailServer.MaxQueuedBytes)
+                             && server.m_socket.GetSendQueueSize() <= SailServer.MaxQueuedBytes
+                             && TransferPacing.CanSend(server.m_uid))
                     {
                         int offset = upload.NextChunk * SailServer.ChunkBytes;
                         int length = Math.Min(SailServer.ChunkBytes, upload.Data.Length - offset);
@@ -234,6 +235,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                         package.Write(upload.NextChunk);
                         package.Write(chunk);
                         ZRoutedRpc.instance.InvokeRoutedRPC(server.m_uid, SailNetwork.UploadChunkRpc, package);
+                        TransferPacing.Sent(server.m_uid, length);
 
                         upload.NextChunk++;
                         upload.LastActivity = Time.time;

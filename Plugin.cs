@@ -35,6 +35,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<bool> CompressTextures;
         public static ConfigEntry<bool> ShareTextures;
         public static ConfigEntry<bool> ShowOtherPlayersTextures;
+        public static ConfigEntry<int> MaxTransferKBPerSecond;
 
         private readonly Harmony harmony = new Harmony(ModGUID);
 
@@ -49,6 +50,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             CompressTextures = Config.Bind("General", "CompressTextures", true, "Compress custom sail textures in video memory, like the game's own textures: about a quarter of the memory each, with slight artifacts on hard edges and smooth gradients. Turn off for exact images if you have memory to spare. Applies to textures loaded after the change (rejoin the world to reload them).");
             ShareTextures = Config.Bind("Sharing", "ShareMyTextures", true, "On a server with this mod, share a texture from your sails folder with the server the first time you put it on a ship, so other players can see it (if the server allows it, possibly after a moderator's approval). When off, your textures show only for you.");
             ShowOtherPlayersTextures = Config.Bind("Sharing", "ShowOtherPlayersTextures", true, "Show and download the sail textures other players have shared on the server. When off, their ships show the vanilla sail to you. The server's own textures still show.");
+            MaxTransferKBPerSecond = Config.Bind("Sharing", "MaxTransferKBPerSecond", 0, new ConfigDescription("Speed limit for sending sail textures, in KB per second: on a player's game for sharing a texture, on the server for sending textures to each player. 0 means no limit, as fast as the connection allows. The game already limits each connection to 150 KB/s, shared with world updates, so this can only slow transfers down, leaving more room for the world while a texture is sent. Choices: 0, 8, 16, 32, 64, 128; any other value counts as 0.", new AcceptableValueList<int>(0, 8, 16, 32, 64, 128)));
 
             MigrateRenameKey();
 
