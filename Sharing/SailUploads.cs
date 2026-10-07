@@ -12,6 +12,10 @@ namespace malafein.Valheim.ShipwrightsTouch
     // first time it goes on a ship (submit on first use). The server answers the offer (send it,
     // already have it, or refused with a reason), then takes the bytes in paced chunks and answers
     // again once it has checked them. One upload at a time; the rest wait their turn.
+    //
+    // What's sent is the image converted to a plain PNG (SailImages), never the file itself: JPGs
+    // can be shared, and nothing but pixels (no camera location, no editor metadata) leaves the
+    // player's machine. The ship keeps the original file's hash; the server lists it as an alias.
     public static class SailUploads
     {
         // No answer from the server for this long gives up on the upload (the server drops a
@@ -22,6 +26,8 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             public string Hash;
             public string Name;
+
+            // The converted PNG.
             public byte[] Data;
             public int NextChunk = -1;
             public int ChunkCount;
@@ -30,6 +36,10 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         private static readonly Queue<SailTextures.Entry> s_queue = new Queue<SailTextures.Entry>();
         private static readonly Dictionary<string, string> s_refusals = new Dictionary<string, string>();
+
+        // Conversions made this session, by the original file's hash (null when it couldn't be
+        // converted): the panel's size check and the upload use the same one.
+        private static readonly Dictionary<string, byte[]> s_converted = new Dictionary<string, byte[]>();
         private static Upload s_current;
         private static Coroutine s_pump;
 
@@ -40,6 +50,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             s_queue.Clear();
             s_refusals.Clear();
+            s_converted.Clear();
             s_current = null;
             s_pump = null;
         }
@@ -97,13 +108,11 @@ namespace malafein.Valheim.ShipwrightsTouch
             SailTextures.Entry entry = SailTextures.Entries.FirstOrDefault(e => e.Hash == hash);
             if (entry == null) return null;
 
-            // See SailServer.CheckImage.
-            string extension = Path.GetExtension(entry.Path).ToLowerInvariant();
-            if (extension == ".jpg" || extension == ".jpeg") return "only PNG images can be shared";
-
             SailPolicy policy = SailNetwork.Policy;
-            long size = new FileInfo(entry.Path).Length;
-            if (size > policy.MaxFileKilobytes * 1024L) return $"it's over the server's {policy.MaxFileKilobytes} KB limit";
+            byte[] converted = Converted(entry);
+            if (converted == null) return "it couldn't be converted for sharing";
+            if (converted.Length > policy.MaxFileKilobytes * 1024L)
+                return $"it's {converted.Length / 1024} KB as PNG, over the server's {policy.MaxFileKilobytes} KB limit";
 
             Texture2D texture = SailTextures.Get(entry.Hash);
             if (texture != null && (texture.width > policy.MaxDimension || texture.height > policy.MaxDimension))
@@ -115,6 +124,32 @@ namespace malafein.Valheim.ShipwrightsTouch
             return null;
         }
 
+        // The image as it would be sent, converted once per session.
+        private static byte[] Converted(SailTextures.Entry entry)
+        {
+            if (s_converted.TryGetValue(entry.Hash, out byte[] converted)) return converted;
+            try
+            {
+                byte[] original = File.ReadAllBytes(entry.Path);
+                if (SailTextures.HashOf(original) == entry.Hash)
+                {
+                    converted = SailImages.ToSharedPng(original, out _, out _, out string error);
+                    if (converted == null) Log.Warn($"Could not convert sail texture {entry.Name} for sharing: {error}.");
+#if DEBUG
+                    // Testing the server's checks: a file whose name starts with "raw-" is sent as
+                    // it is, the way a modified client could.
+                    if (entry.Name.StartsWith("raw-")) converted = original;
+#endif
+                }
+            }
+            catch (IOException e)
+            {
+                Log.Warn($"Could not read sail texture {entry.Name} to share it: {e.Message}");
+            }
+            s_converted[entry.Hash] = converted;
+            return converted;
+        }
+
         private static void StartNext()
         {
             ZNet net = ZNet.instance;
@@ -123,17 +158,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             while (s_queue.Count > 0)
             {
                 SailTextures.Entry entry = s_queue.Dequeue();
-                byte[] data;
-                try
-                {
-                    data = File.ReadAllBytes(entry.Path);
-                }
-                catch (IOException e)
-                {
-                    Log.Warn($"Could not read sail texture {entry.Name} to share it: {e.Message}");
-                    continue;
-                }
-                if (SailTextures.HashOf(data) != entry.Hash) continue;
+                byte[] data = Converted(entry);
+                if (data == null) continue;
 
                 s_current = new Upload
                 {
@@ -148,6 +174,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 package.Write(s_current.Hash);
                 package.Write(s_current.Name);
                 package.Write(data.Length);
+                package.Write(SailTextures.HashOf(data));
                 Log.Debug($"Offering sail texture {s_current.Name} ({data.Length} bytes) to the server.");
                 ZRoutedRpc.instance.InvokeRoutedRPC(net.GetServerPeer().m_uid, SailNetwork.OfferUploadRpc, package);
 

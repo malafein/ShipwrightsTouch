@@ -120,60 +120,94 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             if (string.IsNullOrEmpty(hash)) return null;
 
-            // Someone else's texture only while the server allows it (a later denial hides it even
-            // if it's already loaded or cached). A hosting player reads uploads straight from the
-            // server's uploads folder.
-            s_byHash.TryGetValue(hash, out Entry entry);
-            string serverPath = entry == null ? SailServer.PathOf(hash) : null;
-            if (entry == null && serverPath == null && !SailDownloads.MayShow(hash)) return null;
+            // A local file first, also when the ship holds another hash for the same texture (a
+            // shared texture's alias). Someone else's texture only while the server allows it (a
+            // later denial hides it even if it's already loaded or cached). A hosting player reads
+            // uploads straight from the server's own files. Loaded textures are keyed by the image
+            // (the local file's hash, or the server's canonical one), not by whichever of its
+            // hashes a ship holds.
+            Entry entry = LocalEntryFor(hash);
+            string key;
+            string serverPath = null;
+            if (entry != null)
+            {
+                key = entry.Hash;
+            }
+            else if ((serverPath = SailServer.PathOf(hash, out key)) == null)
+            {
+                if (!SailDownloads.MayShow(hash)) return null;
+                key = SailDownloads.Canonical(hash);
+            }
 
-            if (s_loaded.TryGetValue(hash, out Texture2D texture)) return texture;
-            if (s_failed.ContainsKey(hash)) return null;
+            if (s_loaded.TryGetValue(key, out Texture2D texture)) return texture;
+            if (s_failed.ContainsKey(key)) return null;
 
             if (serverPath != null)
             {
-                entry = new Entry { Hash = hash, Name = hash.Substring(0, 8), Path = serverPath };
+                entry = new Entry { Hash = key, Name = key.Substring(0, 8), Path = serverPath };
             }
-            else if (entry == null && SailDownloads.IsCached(hash))
+            else if (entry == null && SailDownloads.IsCached(key))
             {
                 entry = new Entry
                 {
-                    Hash = hash,
-                    Name = SailDownloads.Find(hash)?.Name ?? hash.Substring(0, 8),
-                    Path = SailDownloads.CachedPath(hash)
+                    Hash = key,
+                    Name = SailDownloads.Find(key)?.Name ?? key.Substring(0, 8),
+                    Path = SailDownloads.CachedPath(key)
                 };
             }
             if (entry == null)
             {
-                SailDownloads.Request(hash);
+                SailDownloads.Request(key);
                 return null;
             }
 
             texture = Load(entry, out string problem);
             if (texture == null)
             {
-                s_failed[hash] = problem;
+                s_failed[key] = problem;
                 return null;
             }
 
-            s_loaded[hash] = texture;
+            s_loaded[key] = texture;
             return texture;
         }
 
+        // The player's own file for a texture: by its hash, or by any hash the server's catalog
+        // lists for the same texture.
+        private static Entry LocalEntryFor(string hash)
+        {
+            if (s_byHash.TryGetValue(hash, out Entry entry)) return entry;
+            CatalogEntry shared = SailDownloads.Find(hash);
+            if (shared == null) return null;
+            if (s_byHash.TryGetValue(shared.Hash, out entry)) return entry;
+            foreach (string alias in shared.Aliases)
+            {
+                if (s_byHash.TryGetValue(alias, out entry)) return entry;
+            }
+            return null;
+        }
+
+        // Whether the player has this texture in their own folders under any of its hashes.
+        public static bool HasLocalCopy(string hash) => hash != null && LocalEntryFor(hash) != null;
+
         public static string NameOf(string hash)
         {
-            return hash != null && s_byHash.TryGetValue(hash, out Entry entry) ? entry.Name : SailDownloads.Find(hash)?.Name;
+            if (hash == null) return null;
+            return LocalEntryFor(hash)?.Name ?? SailDownloads.Find(hash)?.Name;
         }
 
         public static bool IsLocal(string hash) => hash != null && s_byHash.ContainsKey(hash);
 
-        public static bool IsBundled(string hash) => hash != null && s_byHash.TryGetValue(hash, out Entry entry) && entry.Bundled;
+        // Included with the mod or a sail pack, under any of its hashes.
+        public static bool IsBundled(string hash) => hash != null && LocalEntryFor(hash)?.Bundled == true;
 
         // Why a texture couldn't be loaded ("unreadable", "too large", ...), or null. Known once
         // Get has tried it.
         public static string ProblemOf(string hash)
         {
-            return hash != null && s_failed.TryGetValue(hash, out string problem) ? problem : null;
+            if (hash == null) return null;
+            string key = LocalEntryFor(hash)?.Hash ?? SailDownloads.Canonical(hash);
+            return s_failed.TryGetValue(key, out string problem) ? problem : null;
         }
 
         private static Texture2D Load(Entry entry, out string problem)

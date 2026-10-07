@@ -24,6 +24,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         private static readonly Dictionary<string, CatalogEntry> s_catalog = new Dictionary<string, CatalogEntry>();
+
+        // Alias hash -> the catalog hash it stands for (CatalogEntry.Aliases).
+        private static readonly Dictionary<string, string> s_aliases = new Dictionary<string, string>();
         private static readonly Dictionary<string, Texture2D> s_thumbnails = new Dictionary<string, Texture2D>();
         private static readonly HashSet<string> s_thumbnailsRequested = new HashSet<string>();
         private static readonly Dictionary<string, Download> s_downloads = new Dictionary<string, Download>();
@@ -40,14 +43,23 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static void StartSession()
         {
             s_catalog.Clear();
+            s_aliases.Clear();
             s_thumbnailsRequested.Clear();
             s_downloads.Clear();
             Changed?.Invoke();
         }
 
+        // The hash the server stores a texture under, for a hash a ship may hold (an alias), or
+        // the hash itself when it isn't one.
+        public static string Canonical(string hash)
+        {
+            return hash != null && s_aliases.TryGetValue(hash, out string canonical) ? canonical : hash;
+        }
+
+        // By its hash or any of its aliases.
         public static CatalogEntry Find(string hash)
         {
-            return hash != null && s_catalog.TryGetValue(hash, out CatalogEntry entry) ? entry : null;
+            return hash != null && s_catalog.TryGetValue(Canonical(hash), out CatalogEntry entry) ? entry : null;
         }
 
         // Whether a texture from the server may be shown and downloaded: in its catalog, not
@@ -64,10 +76,11 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // ── Full images ──────────────────────────────────────────────────
 
-        public static string CachedPath(string hash) => Path.Combine(CacheFolder, hash);
+        public static string CachedPath(string hash) => Path.Combine(CacheFolder, Canonical(hash));
 
         public static bool IsCached(string hash)
         {
+            hash = Canonical(hash);
             if (s_cached == null)
             {
                 s_cached = new HashSet<string>();
@@ -85,6 +98,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static void Request(string hash, bool forModeration = false)
         {
             if (SailNetwork.Mode != ServerMode.Modded) return;
+            hash = Canonical(hash);
             if (!MayShow(hash) && !(forModeration && SailModeration.Find(hash) != null)) return;
             if (s_downloads.TryGetValue(hash, out Download pending) && Time.time - pending.LastActivity < RetrySeconds) return;
 
@@ -99,6 +113,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         // RequestThumbnails) and null.
         public static Texture2D Thumbnail(string hash)
         {
+            hash = Canonical(hash);
             if (s_thumbnails.TryGetValue(hash, out Texture2D texture)) return texture;
 
             byte[] png = SailServer.ThumbnailOf(hash);
@@ -123,7 +138,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             var missing = new List<string>();
             foreach (string hash in s_catalog.Keys)
             {
-                if (!MayShow(hash) || SailTextures.IsLocal(hash)) continue;
+                if (!MayShow(hash) || SailTextures.HasLocalCopy(hash)) continue;
                 if (!s_thumbnailsRequested.Contains(hash) && Thumbnail(hash) == null) missing.Add(hash);
             }
             SendThumbnailRequest(missing);
@@ -155,20 +170,27 @@ namespace malafein.Valheim.ShipwrightsTouch
         // When this game hosts: the server hands its catalog over directly.
         public static void SetHostCatalog(List<CatalogEntry> entries)
         {
-            s_catalog.Clear();
-            foreach (CatalogEntry entry in entries) s_catalog[entry.Hash] = entry;
+            SetCatalog(entries);
             Changed?.Invoke();
+        }
+
+        private static void SetCatalog(IEnumerable<CatalogEntry> entries)
+        {
+            s_catalog.Clear();
+            s_aliases.Clear();
+            foreach (CatalogEntry entry in entries)
+            {
+                if (!IsHash(entry.Hash)) continue;
+                s_catalog[entry.Hash] = entry;
+                foreach (string alias in entry.Aliases) s_aliases[alias] = entry.Hash;
+            }
         }
 
         public static void RPC_Catalog(long sender, ZPackage package)
         {
             if (!FromServer(sender)) return;
 
-            s_catalog.Clear();
-            foreach (CatalogEntry entry in CatalogEntry.ReadList(package))
-            {
-                if (IsHash(entry.Hash)) s_catalog[entry.Hash] = entry;
-            }
+            SetCatalog(CatalogEntry.ReadList(package));
             Log.Debug($"Server sail catalog: {s_catalog.Count} texture(s).");
             Changed?.Invoke();
         }

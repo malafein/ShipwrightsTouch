@@ -37,9 +37,10 @@ namespace malafein.Valheim.ShipwrightsTouch
     // are put back when the session ends, since they only matter when this game hosts.
     public static class SailNetwork
     {
-        // Client and server must match exactly. 1 is the first released protocol; bump it only when
-        // a message changes after a release (unreleased builds are always deployed together).
-        public const int ProtocolVersion = 1;
+        // Client and server must match exactly. 1 is the first released protocol (1.2.x), 2 is
+        // 1.3.0 (uploads converted before sending, aliases, upload flags); bump it only when a
+        // message changes after a release (unreleased builds are always deployed together).
+        public const int ProtocolVersion = 2;
 
         private const string HelloRpc = "ShipwrightsTouch_Hello";
         private const string PolicyRpc = "ShipwrightsTouch_Policy";
@@ -311,7 +312,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             Log.Debug($"New server sail policy: {requested}");
 
             // Saves the config file; range limits clamp out-of-range values. Then one broadcast
-            // for all six values, the sender included.
+            // for all the values, the sender included.
             WriteConfig(requested);
             SendPolicyToAll();
         }

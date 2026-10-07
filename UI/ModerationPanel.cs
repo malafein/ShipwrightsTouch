@@ -226,6 +226,9 @@ namespace malafein.Valheim.ShipwrightsTouch
             _details = UIBuilder.AddText(PlaceBoxRect("Details", right, detailsTop, rightWidth, buttonsTop - detailsTop - 8f), "", font, 16f, TextAlignmentOptions.TopLeft);
             _details.richText = true;
             _details.textWrappingMode = TextWrappingModes.Normal;
+            _details.enableAutoSizing = true;
+            _details.fontSizeMin = 12f;
+            _details.fontSizeMax = 16f;
 
             float buttonWidth = (rightWidth - 2 * 10f) / 3f;
             _approve = UIBuilder.AddButton(transform, "Approve", "Approve", () => Decide(ModerationAction.Approve), 16f);
@@ -249,7 +252,8 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public void Open(string selectHash)
         {
-            _selected = selectHash;
+            // A ship may hold an alias of the hash the list uses.
+            _selected = selectHash == null ? null : SailModeration.Find(selectHash)?.Hash ?? SailDownloads.Canonical(selectHash);
             _confirmRemove = false;
             _scroll.scrollSensitivity = Plugin.ScrollSensitivity.Value;
 
@@ -389,7 +393,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             labelRt.anchorMax = Vector2.one;
             labelRt.offsetMin = new Vector2(RowHeight + 8f, 0f);
             labelRt.offsetMax = new Vector2(-8f, 0f);
-            string label = entry.Name + Tag($"by {entry.UploaderName}", "#B0B0B0") + StatusTag(entry.Status);
+            string label = entry.Name + Tag($"by {entry.UploaderName}", "#B0B0B0") + StatusTag(entry);
             var text = UIBuilder.AddText(labelRt, label, VanillaUI.BodyFont, 18f, TextAlignmentOptions.MidlineLeft);
             text.raycastTarget = false;
             text.richText = true;
@@ -400,13 +404,14 @@ namespace malafein.Valheim.ShipwrightsTouch
             _rows.Add(new Row { Hash = hash, Background = background, Thumbnail = image });
         }
 
-        private static string StatusTag(TextureStatus status)
+        private static string StatusTag(ModerationEntry entry)
         {
-            switch (status)
+            string flag = (entry.Flags & UploadFlags.UnexpectedContent) != 0 ? Tag("unexpected", "#E8A23C") : "";
+            switch (entry.Status)
             {
-                case TextureStatus.Pending: return Tag("pending", "#E8C547");
-                case TextureStatus.Denied: return Tag("denied", "#E06A5A");
-                default: return Tag("approved", "#8FC97A");
+                case TextureStatus.Pending: return Tag("pending", "#E8C547") + flag;
+                case TextureStatus.Denied: return Tag(entry.AutoDecided ? "auto-denied" : "denied", "#E06A5A") + flag;
+                default: return Tag("approved", "#8FC97A") + flag;
             }
         }
 
@@ -463,17 +468,28 @@ namespace malafein.Valheim.ShipwrightsTouch
             {
                 UIPalette.Header(entry.Name),
                 $"Shared by {entry.UploaderName} on {entry.Date}",
-                $"{entry.Width}x{entry.Height}, {(entry.Bytes + 1023) / 1024} KB",
+                $"{entry.Width}x{entry.Height}, {Kilobytes(entry.Bytes)} KB"
+                    + (entry.UploadedBytes > 0 && entry.UploadedBytes != entry.Bytes ? $" (sent as {Kilobytes(entry.UploadedBytes)} KB)" : ""),
                 entry.ShipsUsing == 1 ? "Used on 1 ship" : $"Used on {entry.ShipsUsing} ships"
             };
 
-            string decided = entry.DecidedBy != "" ? $" by {entry.DecidedBy}, {entry.DecidedDate}" : "";
+            string decided = entry.AutoDecided
+                ? $" automatically, {entry.DecidedDate}"
+                : entry.DecidedBy != "" ? $" by {entry.DecidedBy}, {entry.DecidedDate}" : "";
             switch (entry.Status)
             {
                 case TextureStatus.Pending: lines.Add($"<color=#E8C547>Pending</color>: only its uploader and moderators see it."); break;
                 case TextureStatus.Denied: lines.Add($"<color=#E06A5A>Denied</color>{decided}: only its uploader sees it."); break;
                 default: lines.Add(entry.DecidedBy != "" ? $"<color=#8FC97A>Approved</color>{decided}" : "<color=#8FC97A>Approved</color> (no approval needed when shared)"); break;
             }
+
+            // What the server noticed when it converted the upload. Players only ever get its
+            // converted copy, so neither is a danger to them. Unexpected content always converts
+            // differently too, so only that one is shown then.
+            if ((entry.Flags & UploadFlags.UnexpectedContent) != 0)
+                lines.Add("<color=#E8A23C>Unexpected content</color>: the file held more than image data (a modified game or a hand-made file). Players only get the server's clean copy.");
+            else if ((entry.Flags & UploadFlags.ConvertedDifferently) != 0)
+                lines.Add("<color=#B0B0B0>Converted differently by the uploader's game (usually Windows vs Linux; harmless).</color>");
 
             if (_confirmRemove)
             {
@@ -482,6 +498,8 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
             return string.Join("\n", lines);
         }
+
+        private static int Kilobytes(int bytes) => (bytes + 1023) / 1024;
 
         // The full image: read from the server's own files when hosting, otherwise downloaded
         // into the client cache once and loaded from there. Null until it's here.

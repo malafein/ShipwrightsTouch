@@ -16,6 +16,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<int> MaxFileKilobytesConfig;
         public static ConfigEntry<int> MaxDimensionConfig;
         public static ConfigEntry<int> MaxTexturesPerPlayerConfig;
+        public static ConfigEntry<bool> AutoDenyUnexpectedContentConfig;
 
         public bool AllowCustomTextures;
         public bool AllowPlayerTextures;
@@ -23,6 +24,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public int MaxFileKilobytes;
         public int MaxDimension;
         public int MaxTexturesPerPlayer;
+        public bool AutoDenyUnexpectedContent;
 
         // Singleplayer: nothing is shared, so nothing is restricted beyond the local folder's limits.
         public static readonly SailPolicy Unrestricted = new SailPolicy
@@ -32,10 +34,11 @@ namespace malafein.Valheim.ShipwrightsTouch
             RequireApproval = false,
             MaxFileKilobytes = SailTextures.MaxFileBytes / 1024,
             MaxDimension = SailTextures.MaxDimension,
-            MaxTexturesPerPlayer = int.MaxValue
+            MaxTexturesPerPlayer = int.MaxValue,
+            AutoDenyUnexpectedContent = false
         };
 
-        // One tag shared by all six entries, so they lock and unlock together in Configuration
+        // One tag shared by all the entries, so they lock and unlock together in Configuration
         // Manager (which reads ReadOnly from any tag class with this name).
         private static readonly ConfigurationManagerAttributes s_attributes = new ConfigurationManagerAttributes();
 
@@ -49,14 +52,16 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Describe("Allow players to share their own sail textures with everyone. When off, nothing new is shared: players still see their own textures on their own ships, everyone else sees the server's textures, textures approved earlier, or the vanilla sail."));
             RequireApprovalConfig = config.Bind(Section, "RequireApproval", true,
                 Describe("New player textures stay visible only to the player who shared them until a moderator or admin approves them. When off, they're shown to everyone right away; moderators can still deny one later."));
-            MaxFileKilobytesConfig = config.Bind(Section, "MaxTextureFileKB", 1024,
-                Describe("Largest texture file a player may share, in KB.",
+            MaxFileKilobytesConfig = config.Bind(Section, "MaxTextureFileKB", 2048,
+                Describe("Largest texture a player may share, in KB, measured after it's converted to PNG for sharing (a JPG or a carefully compressed PNG can grow). This sets download time and the server's disk use; video memory depends only on MaxTextureSize.",
                     new AcceptableValueRange<int>(64, SailTextures.MaxFileBytes / 1024)));
             MaxDimensionConfig = config.Bind(Section, "MaxTextureSize", 1024,
                 Describe("Largest width or height, in pixels, of a texture a player may share.",
                     new AcceptableValueRange<int>(64, SailTextures.MaxDimension)));
             MaxTexturesPerPlayerConfig = config.Bind(Section, "MaxTexturesPerPlayer", 10,
                 Describe("How many textures each player may share (at least 1)."));
+            AutoDenyUnexpectedContentConfig = config.Bind(Section, "AutoDenyUnexpectedContent", false,
+                Describe("Automatically deny an upload that held more than image data (moderators see it flagged as \"unexpected content\" either way). The game never sends such files itself, so it means a modified game or a hand-made file. Players are only ever sent the server's own clean copy, so this is about keeping such uploads off ships, not about safety. The uploader sees it as auto-denied, and a moderator can still approve it."));
 
             Entries = new ConfigEntryBase[]
             {
@@ -65,7 +70,8 @@ namespace malafein.Valheim.ShipwrightsTouch
                 RequireApprovalConfig,
                 MaxFileKilobytesConfig,
                 MaxDimensionConfig,
-                MaxTexturesPerPlayerConfig
+                MaxTexturesPerPlayerConfig,
+                AutoDenyUnexpectedContentConfig
             };
         }
 
@@ -86,6 +92,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             MaxFileKilobytesConfig.Value = MaxFileKilobytes;
             MaxDimensionConfig.Value = MaxDimension;
             MaxTexturesPerPlayerConfig.Value = MaxTexturesPerPlayer;
+            AutoDenyUnexpectedContentConfig.Value = AutoDenyUnexpectedContent;
         }
 
         public static SailPolicy FromConfig()
@@ -97,7 +104,8 @@ namespace malafein.Valheim.ShipwrightsTouch
                 RequireApproval = RequireApprovalConfig.Value,
                 MaxFileKilobytes = MaxFileKilobytesConfig.Value,
                 MaxDimension = MaxDimensionConfig.Value,
-                MaxTexturesPerPlayer = Math.Max(1, MaxTexturesPerPlayerConfig.Value)
+                MaxTexturesPerPlayer = Math.Max(1, MaxTexturesPerPlayerConfig.Value),
+                AutoDenyUnexpectedContent = AutoDenyUnexpectedContentConfig.Value
             };
         }
 
@@ -109,6 +117,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             package.Write(MaxFileKilobytes);
             package.Write(MaxDimension);
             package.Write(MaxTexturesPerPlayer);
+            package.Write(AutoDenyUnexpectedContent);
         }
 
         public static SailPolicy Read(ZPackage package)
@@ -120,14 +129,15 @@ namespace malafein.Valheim.ShipwrightsTouch
                 RequireApproval = package.ReadBool(),
                 MaxFileKilobytes = package.ReadInt(),
                 MaxDimension = package.ReadInt(),
-                MaxTexturesPerPlayer = package.ReadInt()
+                MaxTexturesPerPlayer = package.ReadInt(),
+                AutoDenyUnexpectedContent = package.ReadBool()
             };
         }
 
         public override string ToString()
         {
             return $"custom={AllowCustomTextures} player={AllowPlayerTextures} approval={RequireApproval} " +
-                   $"maxKB={MaxFileKilobytes} maxSize={MaxDimension} perPlayer={MaxTexturesPerPlayer}";
+                   $"maxKB={MaxFileKilobytes} maxSize={MaxDimension} perPlayer={MaxTexturesPerPlayer} autoDeny={AutoDenyUnexpectedContent}";
         }
     }
 

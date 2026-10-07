@@ -383,7 +383,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 // texture.
                 foreach (CatalogEntry entry in SortedCatalog())
                 {
-                    if (SailTextures.IsLocal(entry.Hash) || !SailDownloads.MayShow(entry.Hash)) continue;
+                    if (SailTextures.HasLocalCopy(entry.Hash) || !SailDownloads.MayShow(entry.Hash)) continue;
                     AddTextureRow(entry.Hash, entry.Name + StatusTag(entry.Hash), SailDownloads.Thumbnail(entry.Hash));
                 }
                 SailDownloads.RequestThumbnails();
@@ -409,7 +409,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             switch (entry.Status)
             {
                 case TextureStatus.Pending: return uploader + Tag("pending", "#E8C547");
-                case TextureStatus.Denied: return uploader + Tag("denied", "#E06A5A");
+                case TextureStatus.Denied: return uploader + Tag(entry.AutoDenied ? "auto-denied" : "denied", "#E06A5A");
                 default: return entry.Mine ? Tag("shared", "#8FC97A") : uploader;
             }
         }
@@ -426,8 +426,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         private static string CatalogKey()
         {
             var hashes = new List<string>();
-            // Status included: an approval or denial changes the row's tag.
-            foreach (CatalogEntry entry in SailDownloads.Catalog) hashes.Add(entry.Hash + entry.Status);
+            // Status included: an approval or denial changes the row's tag. Aliases too: a new one
+            // can make one of the player's own textures show as shared.
+            foreach (CatalogEntry entry in SailDownloads.Catalog) hashes.Add(entry.Hash + entry.Status + entry.Aliases.Count);
             hashes.Sort(System.StringComparer.Ordinal);
             return SailNetwork.Policy.AllowCustomTextures + ":" + Plugin.ShowOtherPlayersTextures.Value + ":" + string.Join(",", hashes);
         }
@@ -507,7 +508,10 @@ namespace malafein.Valheim.ShipwrightsTouch
                 switch (entry.Status)
                 {
                     case TextureStatus.Pending: return "Waiting for approval: until then only you see it.";
-                    case TextureStatus.Denied: return "This texture was denied on this server: only you see it.";
+                    case TextureStatus.Denied:
+                        return entry.AutoDenied
+                            ? "Denied automatically: unusual data in the file. Ask a moderator to review it."
+                            : "This texture was denied on this server: only you see it.";
                     default: return "Shared: everyone sees this texture.";
                 }
             }

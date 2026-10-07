@@ -21,6 +21,7 @@ namespace malafein.Valheim.ShipwrightsTouch
     public class ModerationEntry
     {
         public string Hash;
+        public List<string> Aliases = new List<string>();
         public string Name;
         public TextureStatus Status;
         public string UploaderName = "";
@@ -31,6 +32,11 @@ namespace malafein.Valheim.ShipwrightsTouch
         public int Width;
         public int Height;
         public int Bytes;
+        public int UploadedBytes;
+        public UploadFlags Flags;
+
+        // Denied by the server's AutoDenyUnexpectedContent setting, not a moderator.
+        public bool AutoDecided;
 
         // Whether the server still has the image (a denial loaded without its file has none).
         public bool HasImage;
@@ -49,11 +55,16 @@ namespace malafein.Valheim.ShipwrightsTouch
             package.Write(Height);
             package.Write(Bytes);
             package.Write(HasImage);
+            package.Write(UploadedBytes);
+            package.Write((byte)Flags);
+            package.Write(AutoDecided);
+            package.Write(Aliases.Count);
+            foreach (string alias in Aliases) package.Write(alias);
         }
 
         public static ModerationEntry Read(ZPackage package)
         {
-            return new ModerationEntry
+            var entry = new ModerationEntry
             {
                 Hash = package.ReadString(),
                 Name = package.ReadString(),
@@ -66,8 +77,13 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Width = package.ReadInt(),
                 Height = package.ReadInt(),
                 Bytes = package.ReadInt(),
-                HasImage = package.ReadBool()
+                HasImage = package.ReadBool(),
+                UploadedBytes = package.ReadInt(),
+                Flags = (UploadFlags)package.ReadByte(),
+                AutoDecided = package.ReadBool()
             };
+            entry.Aliases = CatalogEntry.ReadAliases(package);
+            return entry;
         }
     }
 
@@ -78,6 +94,7 @@ namespace malafein.Valheim.ShipwrightsTouch
     public static class SailModeration
     {
         private static readonly Dictionary<string, ModerationEntry> s_entries = new Dictionary<string, ModerationEntry>();
+        private static readonly Dictionary<string, string> s_aliases = new Dictionary<string, string>();
 
         public static IReadOnlyCollection<ModerationEntry> Entries => s_entries.Values;
 
@@ -89,12 +106,16 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static void StartSession()
         {
             s_entries.Clear();
+            s_aliases.Clear();
             Changed?.Invoke();
         }
 
+        // By its hash or any of its aliases (a ship may point at an alias).
         public static ModerationEntry Find(string hash)
         {
-            return hash != null && s_entries.TryGetValue(hash, out ModerationEntry entry) ? entry : null;
+            if (hash == null) return null;
+            if (s_aliases.TryGetValue(hash, out string canonical)) hash = canonical;
+            return s_entries.TryGetValue(hash, out ModerationEntry entry) ? entry : null;
         }
 
         public static void RequestList()
@@ -125,11 +146,14 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (sender == 0L || sender != ServerPeer()) return;
 
             s_entries.Clear();
+            s_aliases.Clear();
             int count = package.ReadInt();
             for (int i = 0; i < count; i++)
             {
                 ModerationEntry entry = ModerationEntry.Read(package);
-                if (SailDownloads.IsHash(entry.Hash)) s_entries[entry.Hash] = entry;
+                if (!SailDownloads.IsHash(entry.Hash)) continue;
+                s_entries[entry.Hash] = entry;
+                foreach (string alias in entry.Aliases) s_aliases[alias] = entry.Hash;
             }
             Log.Debug($"Moderation list: {s_entries.Count} player texture(s).");
             Changed?.Invoke();

@@ -16,6 +16,11 @@ namespace malafein.Valheim.ShipwrightsTouch
     // texture bytes to the clients that ask, and taking player uploads. The catalog is the server's
     // own sails folder plus the uploads folder, whose index file remembers each upload's uploader
     // and status (denied ones too, so they can't be sent again).
+    //
+    // Players only ever receive PNGs this server wrote itself (SailImages): an upload is converted
+    // on arrival and only the conversion is kept, and the server's own sails are sent as converted
+    // copies. A texture is stored under the hash of its conversion; the other hashes that mean it
+    // (the original file a ship points at, the uploader's own conversion) are its aliases.
     public static class SailServer
     {
         // Small chunks, sent only while the peer's send queue is nearly empty, so world updates
@@ -28,7 +33,15 @@ namespace malafein.Valheim.ShipwrightsTouch
         private const float UploadTimeoutSeconds = 60f;
 
         private const string IndexFileName = "index.txt";
-        private const string IndexHeader = "# hash\tfile\tname\tstatus\tuploader id\tuploader name\tdate\tdecided by id\tdecided by name\tdecided date";
+
+        // The first ten columns are the 1.2.x layout, so an older version can still read the file.
+        // A line without the later columns is a 1.2.x upload, stored unconverted: it's converted
+        // on load (LoadUploads), the original kept in LegacyFolderName.
+        private const string IndexHeader = "# Shipwright's Touch uploads (1.3.0 format)\n"
+            + "# hash\tfile\tname\tstatus\tuploader id\tuploader name\tdate\tdecided by id\tdecided by name\tdecided date\tflags\tuploaded bytes\taliases";
+        private const int IndexColumns = 13;
+        private const string LegacyFolderName = "pre-1.3.0";
+        private const string AutoDeciderName = "automatic";
 
         // Every ZDO the server holds, for counting the ships that use a texture. Private in ZDOMan.
         private static readonly FieldInfo s_objectsById = AccessTools.Field(typeof(ZDOMan), "m_objectsByID");
@@ -44,6 +57,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         private static readonly Dictionary<string, CatalogEntry> s_entries = new Dictionary<string, CatalogEntry>();
+        private static readonly Dictionary<string, string> s_aliases = new Dictionary<string, string>();
         private static readonly Dictionary<string, byte[]> s_thumbnails = new Dictionary<string, byte[]>();
         private static readonly Dictionary<string, string> s_paths = new Dictionary<string, string>();
         private static readonly List<Transfer> s_transfers = new List<Transfer>();
@@ -51,7 +65,10 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         private class Upload
         {
+            // The player's original file (what their ship holds) and their conversion of it
+            // (what's sent).
             public string Hash;
+            public string SentHash;
             public string Name;
             public int Size;
             public byte[][] Chunks;
@@ -68,10 +85,15 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         public static string UploadsFolder => Path.Combine(Paths.ConfigPath, "ShipwrightsTouch", "uploads");
 
+        // Converted copies of the server's own sails, named by the original file's hash. Made once
+        // per file; the owner's files are never touched.
+        private static string SailCopiesFolder => Path.Combine(Paths.ConfigPath, "ShipwrightsTouch", "server-sails");
+
         // Called on the server at session start.
         public static void StartSession(ZNet net)
         {
             s_entries.Clear();
+            s_aliases.Clear();
             s_thumbnails.Clear();
             s_paths.Clear();
             s_transfers.Clear();
@@ -80,36 +102,118 @@ namespace malafein.Valheim.ShipwrightsTouch
             s_pump = null;
             if (ZNet.IsSinglePlayer) return;
 
-            SailTextures.Refresh();
-            foreach (SailTextures.Entry entry in SailTextures.Entries)
-            {
-                byte[] bytes = File.ReadAllBytes(entry.Path);
-                byte[] thumbnail = SailThumbnails.Make(bytes, out int width, out int height, out string error);
-                if (thumbnail == null)
-                {
-                    Log.Warn($"Skipping server sail texture {entry.Name}: {error}.");
-                    continue;
-                }
-
-                s_entries[entry.Hash] = new CatalogEntry
-                {
-                    Hash = entry.Hash,
-                    Name = entry.Name,
-                    Source = TextureSource.Server,
-                    Status = TextureStatus.Approved,
-                    Width = width,
-                    Height = height,
-                    Bytes = bytes.Length
-                };
-                s_thumbnails[entry.Hash] = thumbnail;
-                s_paths[entry.Hash] = entry.Path;
-            }
-            Log.Info($"Serving {s_entries.Count} sail texture(s) from the server's sails folder.");
-
+            LoadServerSails();
             LoadUploads();
             SailDownloads.SetHostCatalog(VisibleTo(ZNet.GetUID()));
 
             s_pump = net.StartCoroutine(Pump());
+        }
+
+        // The hash a texture is stored under, for any of its hashes.
+        private static string Canonical(string hash)
+        {
+            return hash != null && s_aliases.TryGetValue(hash, out string canonical) ? canonical : hash;
+        }
+
+        private static CatalogEntry Find(string hash)
+        {
+            return hash != null && s_entries.TryGetValue(Canonical(hash), out CatalogEntry entry) ? entry : null;
+        }
+
+        private static void Add(CatalogEntry entry, byte[] thumbnail, string path)
+        {
+            s_entries[entry.Hash] = entry;
+            foreach (string alias in entry.Aliases) s_aliases[alias] = entry.Hash;
+            if (thumbnail != null) s_thumbnails[entry.Hash] = thumbnail;
+            if (path != null) s_paths[entry.Hash] = path;
+        }
+
+        private static void AddAliases(CatalogEntry entry, params string[] hashes)
+        {
+            foreach (string hash in hashes)
+            {
+                if (hash == entry.Hash || entry.Aliases.Contains(hash)) continue;
+                entry.Aliases.Add(hash);
+                s_aliases[hash] = entry.Hash;
+            }
+        }
+
+        // The server's own sails, sent as converted copies. A copy is made the first time a file
+        // is seen (or after it changes, which changes its hash) and reused after that; copies of
+        // files that are gone are deleted.
+        private static void LoadServerSails()
+        {
+            SailTextures.Refresh();
+            var used = new HashSet<string>();
+            foreach (SailTextures.Entry sail in SailTextures.Entries)
+            {
+                string copyPath = Path.Combine(SailCopiesFolder, sail.Hash + ".png");
+                used.Add(Path.GetFileName(copyPath));
+                byte[] copy;
+                try
+                {
+                    copy = File.Exists(copyPath) ? File.ReadAllBytes(copyPath) : null;
+                    if (copy == null)
+                    {
+                        copy = SailImages.ToSharedPng(File.ReadAllBytes(sail.Path), out _, out _, out string error);
+                        if (copy == null)
+                        {
+                            Log.Warn($"Skipping server sail texture {sail.Name}: {error}.");
+                            continue;
+                        }
+                        Directory.CreateDirectory(SailCopiesFolder);
+                        File.WriteAllBytes(copyPath, copy);
+                    }
+                }
+                catch (IOException e)
+                {
+                    Log.Warn($"Skipping server sail texture {sail.Name}: {e.Message}");
+                    continue;
+                }
+
+                byte[] thumbnail = SailThumbnails.Make(copy, out int width, out int height, out string thumbnailError);
+                if (thumbnail == null)
+                {
+                    Log.Warn($"Skipping server sail texture {sail.Name}: {thumbnailError}.");
+                    continue;
+                }
+
+                string hash = SailTextures.HashOf(copy);
+                if (s_entries.TryGetValue(hash, out CatalogEntry same))
+                {
+                    // Another file with the same pixels.
+                    AddAliases(same, sail.Hash);
+                    continue;
+                }
+
+                var entry = new CatalogEntry
+                {
+                    Hash = hash,
+                    Name = sail.Name,
+                    Source = TextureSource.Server,
+                    Status = TextureStatus.Approved,
+                    Width = width,
+                    Height = height,
+                    Bytes = copy.Length
+                };
+                if (sail.Hash != hash) entry.Aliases.Add(sail.Hash);
+                Add(entry, thumbnail, copyPath);
+            }
+            Log.Info($"Serving {s_entries.Count} sail texture(s) from the server's sails folder.");
+
+            if (!Directory.Exists(SailCopiesFolder)) return;
+            foreach (string path in Directory.GetFiles(SailCopiesFolder))
+            {
+                if (used.Contains(Path.GetFileName(path))) continue;
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException e)
+                {
+                    Log.Warn($"Could not delete {path}: {e.Message}");
+                }
+            }
         }
 
         // What a peer may see: the server's textures and approved uploads; pending ones only by
@@ -155,17 +259,22 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             ZNet net = ZNet.instance;
             if (net == null || !net.IsServer() || hash == null) return null;
-            return s_thumbnails.TryGetValue(hash, out byte[] png) ? png : null;
+            return s_thumbnails.TryGetValue(Canonical(hash), out byte[] png) ? png : null;
         }
 
-        // The file behind a texture this server may show, for when this game is also a player
-        // (hosting): uploads aren't in its own sails folder. Null on clients.
-        public static string PathOf(string hash)
+        // The file behind a texture this server may show, and the hash it's stored under, for when
+        // this game is also a player (hosting): uploads aren't in its own sails folder. Null on
+        // clients.
+        public static string PathOf(string hash, out string canonical)
         {
+            canonical = null;
             ZNet net = ZNet.instance;
             if (net == null || !net.IsServer() || hash == null) return null;
-            if (!s_entries.TryGetValue(hash, out CatalogEntry entry) || entry.Status == TextureStatus.Denied) return null;
-            return s_paths.TryGetValue(hash, out string path) ? path : null;
+            CatalogEntry entry = Find(hash);
+            if (entry == null || entry.Status == TextureStatus.Denied) return null;
+            if (!s_paths.TryGetValue(entry.Hash, out string path)) return null;
+            canonical = entry.Hash;
+            return path;
         }
 
         public static void RPC_GetThumbnails(long sender, ZPackage request)
@@ -197,6 +306,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static void RPC_GetTexture(long sender, string hash)
         {
             if (!FromModdedPeer(sender)) return;
+            hash = Canonical(hash);
             bool visible = VisibleTo(sender).Any(e => e.Hash == hash) || IsModeratedBy(sender, hash);
             if (!visible || !s_paths.TryGetValue(hash, out string path)) return;
             if (s_transfers.Any(t => t.Peer == sender && t.Hash == hash)) return;
@@ -230,7 +340,9 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // ── Uploads ──────────────────────────────────────────────────────
 
-        // A player offers a texture before sending it, so a refusal costs one small message.
+        // A player offers a texture before sending it, so a refusal costs one small message. The
+        // offer names the original file's hash (what the player's ship holds) and the hash and size
+        // of the player's conversion of it, which is what gets sent.
         public static void RPC_OfferUpload(long sender, ZPackage package)
         {
             if (!SailNetwork.IsModdedPeer(sender)) return;
@@ -238,12 +350,13 @@ namespace malafein.Valheim.ShipwrightsTouch
             string hash = package.ReadString();
             string name = CatalogEntry.CleanName(package.ReadString());
             int size = package.ReadInt();
-            if (!SailDownloads.IsHash(hash)) return;
+            string sentHash = package.ReadString();
+            if (!SailDownloads.IsHash(hash) || !SailDownloads.IsHash(sentHash)) return;
 
-            string refusal = CheckUpload(sender, hash, size, out CatalogEntry existing);
+            string refusal = CheckUpload(sender, size, out CatalogEntry existing, hash, sentHash);
             if (existing != null)
             {
-                Answer(sender, hash, UploadAnswer.Shared, existing.Status);
+                AlreadyShared(sender, hash, existing, sentHash);
                 return;
             }
             if (refusal != null)
@@ -256,6 +369,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             s_uploads[sender] = new Upload
             {
                 Hash = hash,
+                SentHash = sentHash,
                 Name = name,
                 Size = size,
                 Chunks = new byte[ChunkCount(size)][],
@@ -298,32 +412,44 @@ namespace malafein.Valheim.ShipwrightsTouch
             }
 
             string hash = upload.Hash;
-            if (SailTextures.HashOf(bytes) != hash)
+            if (SailTextures.HashOf(bytes) != upload.SentHash)
             {
                 Answer(sender, hash, UploadAnswer.Refused, refusal: "the upload arrived damaged");
                 return;
             }
 
-            // Checked again: the policy, the player's count or the texture's status may have
-            // changed while it was on its way.
-            string refusal = CheckUpload(sender, hash, bytes.Length, out CatalogEntry existing);
-            if (existing != null)
+            // Clients only ever send PNGs (they convert JPGs first).
+            if (!SailImages.IsPng(bytes))
             {
-                Answer(sender, hash, UploadAnswer.Shared, existing.Status);
+                Answer(sender, hash, UploadAnswer.Refused, refusal: "it isn't a PNG file");
                 return;
             }
-            string extension = null;
+
+            // Never trusted: converted again here, and only this conversion is kept and sent.
+            byte[] shared = SailImages.ToSharedPng(bytes, out int width, out int height, out string error);
+            if (shared == null)
+            {
+                Log.Debug($"Could not convert an upload from {ServerRoles.PeerName(sender)}: {error}.");
+                Answer(sender, hash, UploadAnswer.Refused, refusal: "the server couldn't read the image");
+                return;
+            }
+            string sharedHash = SailTextures.HashOf(shared);
+
+            // Checked again: the policy, the player's count or the texture's status may have
+            // changed while it was on its way, and its conversion may match a texture already here.
+            string refusal = CheckUpload(sender, shared.Length, out CatalogEntry existing, hash, upload.SentHash, sharedHash);
+            if (existing != null)
+            {
+                AlreadyShared(sender, hash, existing, upload.SentHash);
+                return;
+            }
+            int max = SailPolicy.MaxDimensionConfig.Value;
+            if (refusal == null && (width > max || height > max)) refusal = $"it's {width}x{height}, over the server's {max}x{max} limit";
             byte[] thumbnail = null;
-            int width = 0;
-            int height = 0;
             if (refusal == null)
             {
-                refusal = CheckImage(
-                    bytes,
-                    out extension,
-                    out thumbnail,
-                    out width,
-                    out height);
+                thumbnail = SailThumbnails.Make(shared, out _, out _, out _);
+                if (thumbnail == null) refusal = "the server couldn't read the image";
             }
             if (refusal != null)
             {
@@ -331,12 +457,12 @@ namespace malafein.Valheim.ShipwrightsTouch
                 return;
             }
 
-            string fileName = $"{upload.Name.Replace(' ', '_')}-{hash.Substring(0, 8)}{extension}";
+            string fileName = $"{upload.Name.Replace(' ', '_')}-{sharedHash.Substring(0, 8)}.png";
             string path = Path.Combine(UploadsFolder, fileName);
             try
             {
                 Directory.CreateDirectory(UploadsFolder);
-                File.WriteAllBytes(path, bytes);
+                File.WriteAllBytes(path, shared);
             }
             catch (IOException e)
             {
@@ -348,7 +474,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             ZNetPeer peer = ZNet.instance.GetPeer(sender);
             var entry = new CatalogEntry
             {
-                Hash = hash,
+                Hash = sharedHash,
                 Name = upload.Name,
                 Source = TextureSource.Player,
                 Status = SailPolicy.RequireApprovalConfig.Value ? TextureStatus.Pending : TextureStatus.Approved,
@@ -358,36 +484,72 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 Width = width,
                 Height = height,
-                Bytes = bytes.Length
+                Bytes = shared.Length,
+                UploadedBytes = bytes.Length
             };
-            s_entries[hash] = entry;
-            s_thumbnails[hash] = thumbnail;
-            s_paths[hash] = path;
+            Add(entry, thumbnail, path);
+            AddAliases(entry, hash, upload.SentHash);
+
+            string unexpected = SailImages.UnexpectedContent(bytes);
+            if (unexpected != null)
+            {
+                entry.Flags |= UploadFlags.UnexpectedContent;
+                Log.Warn($"Sail texture {fileName} from {ServerRoles.PeerName(sender)} ({entry.UploaderId}) held more than image data ({unexpected}); only the server's converted copy is kept.");
+            }
+            if (sharedHash != upload.SentHash)
+            {
+                entry.Flags |= UploadFlags.ConvertedDifferently;
+                Log.Info($"Sail texture {fileName} from {ServerRoles.PeerName(sender)} didn't match the server's conversion ({bytes.Length} bytes sent, {shared.Length} converted).");
+            }
+            bool autoDenied = unexpected != null && SailPolicy.AutoDenyUnexpectedContentConfig.Value;
+            if (autoDenied) Decide(entry, TextureStatus.Denied, null);
             SaveIndex();
 
-            Log.Info($"{ServerRoles.PeerName(sender)} shared sail texture {fileName} ({entry.Status}).");
-            Answer(sender, hash, UploadAnswer.Shared, entry.Status);
+            Log.Info($"{ServerRoles.PeerName(sender)} shared sail texture {fileName} ({(autoDenied ? "automatically denied" : entry.Status.ToString())}).");
+            if (autoDenied)
+                Answer(sender, hash, UploadAnswer.Refused, refusal: "the server automatically denied it");
+            else
+                Answer(sender, hash, UploadAnswer.Shared, entry.Status);
             SendCatalogToAll();
+            SendModerationToModerators();
+        }
+
+        // The server already has this texture (under any of its hashes): remember the player's
+        // hashes for it, so their ship finds it, and tell them its status.
+        private static void AlreadyShared(long sender, string hash, CatalogEntry existing, string sentHash)
+        {
+            int aliases = existing.Aliases.Count;
+            AddAliases(existing, hash, sentHash);
+            if (existing.Aliases.Count != aliases)
+            {
+                if (existing.Source == TextureSource.Player) SaveIndex();
+                SendCatalogToAll();
+            }
+
+            if (existing.Status == TextureStatus.Denied)
+                Answer(sender, hash, UploadAnswer.Refused, refusal: "it was denied on this server");
+            else
+                Answer(sender, hash, UploadAnswer.Shared, existing.Status);
         }
 
         // Null if the server takes this texture from this player. Sets existing (and returns null)
-        // when the server already has it, so there's nothing to send.
-        private static string CheckUpload(long sender, string hash, int size, out CatalogEntry existing)
+        // when the server already has it under any of the given hashes, so there's nothing to send.
+        // Size is the converted PNG's.
+        private static string CheckUpload(long sender, int size, out CatalogEntry existing, params string[] hashes)
         {
             existing = null;
             if (!SailPolicy.AllowCustomTexturesConfig.Value) return "this server doesn't allow custom sail textures";
 
-            if (s_entries.TryGetValue(hash, out CatalogEntry known))
+            foreach (string hash in hashes)
             {
-                if (known.Status == TextureStatus.Denied) return "it was denied on this server";
-                existing = known;
-                return null;
+                existing = Find(hash);
+                if (existing != null) return null;
             }
 
             if (!SailPolicy.AllowPlayerTexturesConfig.Value) return "this server doesn't take player textures";
 
             int maxKilobytes = SailPolicy.MaxFileKilobytesConfig.Value;
-            if (size <= 0 || size > maxKilobytes * 1024) return $"it's over the server's {maxKilobytes} KB limit";
+            if (size <= 0 || size > maxKilobytes * 1024) return $"it's over the server's {maxKilobytes} KB limit (after conversion to PNG)";
 
             int max = Math.Max(1, SailPolicy.MaxTexturesPerPlayerConfig.Value);
             int shared = SharedCount(ServerRoles.PeerId(sender));
@@ -396,45 +558,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             return null;
         }
 
-        // Decodes the image: a real PNG or JPG, within the size limit.
-        private static string CheckImage(
-            byte[] bytes,
-            out string extension,
-            out byte[] thumbnail,
-            out int width,
-            out int height)
-        {
-            thumbnail = null;
-            width = 0;
-            height = 0;
-            extension = ImageExtension(bytes);
-            if (extension == null) return "it isn't a PNG or JPG file";
-
-            // JPGs from phones and cameras can carry where the photo was taken; shared files go to
-            // every player byte for byte, so only PNGs are shared. JPGs still work locally.
-            if (extension != ".png") return "only PNG images can be shared";
-
-            thumbnail = SailThumbnails.Make(bytes, out width, out height, out string error);
-            if (thumbnail == null) return "the server couldn't read the image";
-
-            int max = SailPolicy.MaxDimensionConfig.Value;
-            if (width > max || height > max) return $"it's {width}x{height}, over the server's {max}x{max} limit";
-
-            return null;
-        }
-
         private static int SharedCount(string uploaderId)
         {
             if (string.IsNullOrEmpty(uploaderId)) return 0;
             return s_entries.Values.Count(e => e.CountsTowardLimit && e.UploaderId == uploaderId);
-        }
-
-        // From the file's first bytes, never its name.
-        private static string ImageExtension(byte[] bytes)
-        {
-            if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return ".png";
-            if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return ".jpg";
-            return null;
         }
 
         private static int ChunkCount(int size) => Math.Max(1, (size + ChunkBytes - 1) / ChunkBytes);
@@ -477,7 +604,8 @@ namespace malafein.Valheim.ShipwrightsTouch
         // A player texture a moderator may look at in full, whatever its status.
         private static bool IsModeratedBy(long peer, string hash)
         {
-            return s_entries.TryGetValue(hash, out CatalogEntry entry)
+            CatalogEntry entry = Find(hash);
+            return entry != null
                 && entry.Source == TextureSource.Player
                 && ServerRoles.PeerHas(peer, ServerRoles.Moderate);
         }
@@ -487,7 +615,7 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             ZNet net = ZNet.instance;
             if (net == null || !net.IsServer() || hash == null) return null;
-            return s_paths.TryGetValue(hash, out string path) ? path : null;
+            return s_paths.TryGetValue(Canonical(hash), out string path) ? path : null;
         }
 
         public static void RPC_GetModeration(long sender)
@@ -499,9 +627,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         {
             if (!FromModerator(sender, "a sail texture decision")) return;
 
-            string hash = package.ReadString();
+            CatalogEntry entry = Find(package.ReadString());
             var action = (ModerationAction)package.ReadByte();
-            if (!s_entries.TryGetValue(hash, out CatalogEntry entry) || entry.Source != TextureSource.Player)
+            if (entry == null || entry.Source != TextureSource.Player)
             {
                 // Someone else removed it first; the fresh list shows that.
                 SendModeration(sender);
@@ -511,7 +639,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             switch (action)
             {
                 case ModerationAction.Approve:
-                    if (!s_paths.ContainsKey(hash))
+                    if (!s_paths.ContainsKey(entry.Hash))
                     {
                         Log.Info($"Can't approve sail texture {entry.FileName}: the server no longer has its file.");
                         SendModeration(sender);
@@ -521,7 +649,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                     break;
                 case ModerationAction.Deny:
                     Decide(entry, TextureStatus.Denied, sender);
-                    s_transfers.RemoveAll(t => t.Hash == hash);
+                    s_transfers.RemoveAll(t => t.Hash == entry.Hash);
                     break;
                 case ModerationAction.Remove:
                     Remove(entry);
@@ -536,19 +664,30 @@ namespace malafein.Valheim.ShipwrightsTouch
             SendModerationToModerators();
         }
 
-        private static void Decide(CatalogEntry entry, TextureStatus status, long moderator)
+        // A null moderator is the server itself (AutoDenyUnexpectedContent).
+        private static void Decide(CatalogEntry entry, TextureStatus status, long? moderator)
         {
             entry.Status = status;
-            entry.DecidedById = ServerRoles.PeerId(moderator);
-            string name = moderator == ZNet.GetUID() ? Player.m_localPlayer?.GetPlayerName() : ZNet.instance.GetPeer(moderator)?.m_playerName;
-            entry.DecidedByName = IndexField(Plugin.PlainText(name));
             entry.DecidedDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            entry.AutoDenied = moderator == null && status == TextureStatus.Denied;
+            if (moderator == null)
+            {
+                entry.DecidedById = CatalogEntry.AutoDeciderId;
+                entry.DecidedByName = AutoDeciderName;
+                return;
+            }
+
+            long peer = moderator.Value;
+            entry.DecidedById = ServerRoles.PeerId(peer);
+            string name = peer == ZNet.GetUID() ? Player.m_localPlayer?.GetPlayerName() : ZNet.instance.GetPeer(peer)?.m_playerName;
+            entry.DecidedByName = IndexField(Plugin.PlainText(name));
         }
 
         // Forgets an upload entirely: it frees the uploader's slot and may be shared again.
         private static void Remove(CatalogEntry entry)
         {
             s_entries.Remove(entry.Hash);
+            foreach (string alias in entry.Aliases) s_aliases.Remove(alias);
             s_thumbnails.Remove(entry.Hash);
             s_paths.Remove(entry.Hash);
             s_transfers.RemoveAll(t => t.Hash == entry.Hash);
@@ -597,6 +736,7 @@ namespace malafein.Valheim.ShipwrightsTouch
                 new ModerationEntry
                 {
                     Hash = e.Hash,
+                    Aliases = e.Aliases,
                     Name = e.Name,
                     Status = e.Status,
                     UploaderName = e.UploaderName,
@@ -607,13 +747,17 @@ namespace malafein.Valheim.ShipwrightsTouch
                     Width = e.Width,
                     Height = e.Height,
                     Bytes = e.Bytes,
+                    UploadedBytes = e.UploadedBytes,
+                    Flags = e.Flags,
+                    AutoDecided = e.DecidedById == CatalogEntry.AutoDeciderId,
                     HasImage = s_paths.ContainsKey(e.Hash)
                 }.Write(package);
             }
             return package;
         }
 
-        // Ships (any ZDO) per texture hash, across the whole world the server holds.
+        // Ships (any ZDO) per texture, by the hash it's stored under, across the whole world the
+        // server holds.
         private static Dictionary<string, int> ShipsUsing()
         {
             var counts = new Dictionary<string, int>();
@@ -625,7 +769,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             foreach (ZDO zdo in zdos.Values)
             {
-                string hash = zdo.GetString(s_textureKey);
+                string hash = Canonical(zdo.GetString(s_textureKey));
                 if (hash.Length == 0) continue;
                 counts.TryGetValue(hash, out int count);
                 counts[hash] = count + 1;
@@ -635,14 +779,15 @@ namespace malafein.Valheim.ShipwrightsTouch
 
         // ── Upload index ─────────────────────────────────────────────────
 
-        // One line per upload: hash, file, name, status, uploader id, uploader name, date
-        // (tab-separated). A file moved from uploads/ into sails/ becomes one of the server's own.
+        // One line per upload, tab-separated (see IndexHeader). A file moved from uploads/ into
+        // sails/ becomes one of the server's own.
         private static void LoadUploads()
         {
             string indexPath = Path.Combine(UploadsFolder, IndexFileName);
             if (!File.Exists(indexPath)) return;
 
             int loaded = 0;
+            int converted = 0;
             foreach (string line in File.ReadAllLines(indexPath))
             {
                 if (line.Length == 0 || line.StartsWith("#")) continue;
@@ -658,12 +803,9 @@ namespace malafein.Valheim.ShipwrightsTouch
                     continue;
                 }
 
-                string hash = fields[0];
-                if (s_entries.ContainsKey(hash)) continue;
-
                 var entry = new CatalogEntry
                 {
-                    Hash = hash,
+                    Hash = fields[0],
                     FileName = fields[1],
                     Name = CatalogEntry.CleanName(fields[2]),
                     Source = TextureSource.Player,
@@ -678,17 +820,43 @@ namespace malafein.Valheim.ShipwrightsTouch
                     entry.DecidedByName = fields[8];
                     entry.DecidedDate = fields[9];
                 }
+                entry.AutoDenied = status == TextureStatus.Denied && entry.DecidedById == CatalogEntry.AutoDeciderId;
+
+                bool legacy = fields.Length < IndexColumns;
+                if (!legacy)
+                {
+                    byte.TryParse(fields[10], out byte flags);
+                    entry.Flags = (UploadFlags)flags;
+                    int.TryParse(fields[11], out entry.UploadedBytes);
+                    entry.Aliases = fields[12].Split(',').Where(SailDownloads.IsHash).ToList();
+                }
 
                 string path = Path.Combine(UploadsFolder, entry.FileName);
                 byte[] bytes = File.Exists(path) ? File.ReadAllBytes(path) : null;
-                byte[] thumbnail = bytes != null && SailTextures.HashOf(bytes) == hash
-                    ? SailThumbnails.Make(bytes, out entry.Width, out entry.Height, out _)
-                    : null;
+                if (bytes != null && SailTextures.HashOf(bytes) != entry.Hash) bytes = null;
+                if (bytes != null && legacy)
+                {
+                    bytes = ConvertLegacyUpload(entry, bytes, ref path);
+                    if (bytes != null) converted++;
+                }
+
+                // Only clean PNGs this server wrote are sent; anything else here was put in by hand.
+                byte[] thumbnail = null;
+                if (bytes != null && SailImages.UnexpectedContent(bytes) == null)
+                {
+                    thumbnail = SailThumbnails.Make(bytes, out entry.Width, out entry.Height, out _);
+                }
+
+                if (Find(entry.Hash) != null || entry.Aliases.Any(a => Find(a) != null))
+                {
+                    // The server's own sails (or an earlier line) have the same texture.
+                    continue;
+                }
 
                 // A denial is remembered even without its image (moderators then can't approve it).
                 if (thumbnail == null && status == TextureStatus.Denied)
                 {
-                    s_entries[hash] = entry;
+                    Add(entry, null, null);
                     continue;
                 }
                 if (thumbnail == null)
@@ -699,12 +867,58 @@ namespace malafein.Valheim.ShipwrightsTouch
                 }
 
                 entry.Bytes = bytes.Length;
-                s_entries[hash] = entry;
-                s_thumbnails[hash] = thumbnail;
-                s_paths[hash] = path;
+                Add(entry, thumbnail, path);
                 loaded++;
             }
             Log.Info($"Serving {loaded} sail texture(s) shared by players.");
+
+            if (converted > 0)
+            {
+                SaveIndex();
+                Log.Info($"Converted {converted} sail texture(s) shared with an earlier version to the shared PNG format; the originals are in {Path.Combine(UploadsFolder, LegacyFolderName)}.");
+            }
+        }
+
+        // A 1.2.x upload was stored as the player sent it. Converts it like a new upload, keeps the
+        // old hash as an alias (ships point at it), and moves the original and the old index into
+        // LegacyFolderName, so going back to 1.2.x stays possible. Returns the converted bytes and
+        // points entry and path at them; null if it couldn't be converted (left in place).
+        private static byte[] ConvertLegacyUpload(CatalogEntry entry, byte[] original, ref string path)
+        {
+            byte[] shared = SailImages.ToSharedPng(original, out _, out _, out string error);
+            if (shared == null)
+            {
+                Log.Warn($"Could not convert uploaded sail texture {entry.FileName}: {error}.");
+                return null;
+            }
+
+            string legacyFolder = Path.Combine(UploadsFolder, LegacyFolderName);
+            string hash = SailTextures.HashOf(shared);
+            string fileName = $"{entry.Name.Replace(' ', '_')}-{hash.Substring(0, 8)}.png";
+            string newPath = Path.Combine(UploadsFolder, fileName);
+            try
+            {
+                Directory.CreateDirectory(legacyFolder);
+                string indexBackup = Path.Combine(legacyFolder, IndexFileName);
+                if (!File.Exists(indexBackup)) File.Copy(Path.Combine(UploadsFolder, IndexFileName), indexBackup);
+
+                string backup = Path.Combine(legacyFolder, entry.FileName);
+                if (!File.Exists(backup)) File.Copy(path, backup);
+                File.WriteAllBytes(newPath, shared);
+                if (newPath != path) File.Delete(path);
+            }
+            catch (IOException e)
+            {
+                Log.Warn($"Could not convert uploaded sail texture {entry.FileName}: {e.Message}");
+                return null;
+            }
+
+            if (hash != entry.Hash) entry.Aliases.Add(entry.Hash);
+            entry.Hash = hash;
+            entry.FileName = fileName;
+            entry.UploadedBytes = original.Length;
+            path = newPath;
+            return shared;
         }
 
         private static void SaveIndex()
@@ -724,7 +938,10 @@ namespace malafein.Valheim.ShipwrightsTouch
                     e.Date,
                     e.DecidedById,
                     e.DecidedByName,
-                    e.DecidedDate)).Append('\n');
+                    e.DecidedDate,
+                    ((byte)e.Flags).ToString(),
+                    e.UploadedBytes.ToString(),
+                    string.Join(",", e.Aliases))).Append('\n');
             }
             foreach (string line in s_unloadedIndexLines) text.Append(line).Append('\n');
 
