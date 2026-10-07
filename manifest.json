@@ -1,6 +1,6 @@
 {
     "name": "ShipwrightsTouch",
-    "version_number": "1.2.1",
+    "version_number": "1.3.0",
     "website_url": "https://github.com/malafein/ShipwrightsTouch",
     "description": "Name your ships, color their sails any color, and add custom sail textures shared across your server, with moderation.",
     "dependencies": [

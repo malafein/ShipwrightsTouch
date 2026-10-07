@@ -9,7 +9,7 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 - **Customization Panel:** Press `Left Shift + E` while looking at a ship (rudder, seats, mast, or hull) to open a panel where you name the ship, pick its sail color and sail texture, and choose who owns it. Changes preview live on the ship and are saved when you click Apply.
 - **Any Sail Color:** Pick a preset swatch or type any `#RRGGBB` color. Your last few custom colors are kept as swatches for next time. Press `E` while placing a ship with your Hammer to cycle the presets before it's built.
 - **Custom Sail Textures:** Four historically inspired Viking Age sails are included, and you can add your own PNG or JPG images and choose them in the panel. The sail color tints the image; pick white to show it as-is.
-- **Sharing on Servers:** On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
+- **Sharing on Servers:** On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Only a clean PNG copy of the picture is ever shared. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
 - **Moderation:** Server admins, and moderators they choose, review shared textures in an in-game panel: approve, deny, or remove them.
 - **Dynamic Hover Text:** The ship's name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
 - **Builder Identity & Restrictions:** When a ship is constructed, the builder is recorded as its owner. Only the owner can customize or deconstruct it; a ship made public can be customized by anyone. The owner's name is displayed in the hover text.
@@ -55,13 +55,14 @@ On a server with this mod they're the server's own textures: everyone sees them,
 Put PNG or JPG images in `BepInEx/config/ShipwrightsTouch/sails` (the folder is created on first run) and pick them in the customization panel. Keep your own images here, not under `plugins`: mod managers replace a mod's plugin folder when it updates.
 
 - The image is stretched to fill the sail, on every ship type. Square images work well.
-- Up to 2048×2048 pixels and 4 MB. Servers may set lower limits for shared textures (1024×1024 and 1 MB by default).
+- Up to 2048×2048 pixels and 4 MB. Servers may set lower limits for shared textures (1024×1024 and 2 MB by default, counted after conversion to PNG; see below).
 - Transparent areas show as holes in the sail.
 - The sail color tints the image: white shows it unchanged. Paint the background white or light if you want to recolor the sail with the sail color; an image with a colored background looks best with the sail color set to white.
-- Only PNG images are shared with other players. JPG images work, but only on your own screen: photos can carry the location where they were taken, and shared files reach every player as they are.
+- PNG and JPG images can both be shared. Before sharing, your game converts the image to a plain PNG holding only the picture: no camera location, no editor metadata, nothing else from the file. The server converts it again and only ever sends players its own copy.
+- A converted PNG is often larger than the file you started with (about 1.5× for typical artwork, more for photos), and the server's size limit counts the converted size. The panel tells you before you share if it's over.
 - Images are downloaded the first time a ship using them comes near, then cached in `BepInEx/config/ShipwrightsTouch/cache`.
 
-Each texture's status shows in the panel's list: **shared** (everyone sees it), **pending** (waiting for a moderator's approval; until then only you see it), or **denied** (only you see it). If a texture can't be shared, the panel says why.
+Each texture's status shows in the panel's list: **shared** (everyone sees it), **pending** (waiting for a moderator's approval; until then only you see it), **denied** (only you see it), or **auto-denied** (the server turned it away automatically because the file held more than image data; ask a moderator if you think that's a mistake). If a texture can't be shared, the panel says why.
 
 ### Sharing settings
 - **ShareMyTextures:** Set to `false` to keep your textures to yourself: they show only on your own screen.
@@ -70,16 +71,19 @@ Each texture's status shows in the panel's list: **shared** (everyone sees it), 
 
 ## Server Setup
 
-A server's own textures go in its `BepInEx/config/ShipwrightsTouch/sails` folder; every player sees them, no approval needed. Textures shared by players are kept in `BepInEx/config/ShipwrightsTouch/uploads`.
+A server's own textures go in its `BepInEx/config/ShipwrightsTouch/sails` folder; every player sees them, no approval needed. The server sends players converted copies, kept in `BepInEx/config/ShipwrightsTouch/server-sails`; your files are never changed. Textures shared by players are kept, converted, in `BepInEx/config/ShipwrightsTouch/uploads`.
+
+The server and its players need the same version of the mod to share textures: with a mismatch, players get a notice and their textures show only for them. **Upgrading from 1.2:** on first start the server converts the textures players already shared and keeps the originals and the old index in `uploads/pre-1.3.0`. Ships keep their sails.
 
 The `[Server]` settings apply when your game is the server (a dedicated server, or you hosting). While connected to a server with this mod, they show the server's values, and its admins can change them live from Configuration Manager.
 
 - **AllowCustomSailTextures:** Set to `false` to turn custom textures off for everyone, including a player's own textures on their own screen.
 - **AllowPlayerSailTextures:** Set to `false` to stop new sharing. Textures approved earlier stay visible.
 - **RequireApproval:** `true` (default) keeps a new texture visible only to its uploader until a moderator approves it. When `false`, it's shown to everyone right away; moderators can still deny it later.
-- **MaxTextureFileKB:** Largest file a player may share. Default `1024`.
+- **MaxTextureFileKB:** Largest texture a player may share, in KB, measured after conversion to PNG. Default `2048` (servers set up with 1.2 keep their old value of `1024` until changed). This sets download time and the server's disk use; video memory depends only on the size in pixels.
 - **MaxTextureSize:** Largest width or height a player may share, in pixels. Default `1024`.
 - **MaxTexturesPerPlayer:** How many textures each player may share, denied ones included (a moderator's Remove frees a slot). Default `10`.
+- **AutoDenyUnexpectedContent:** Set to `true` to deny an upload automatically when the file held more than image data. The game never sends such files itself, so one comes from a modified game or was made by hand. Players only ever get the server's clean copy either way. Off by default; a moderator can approve an auto-denied texture.
 
 ### Moderation
 
@@ -90,6 +94,8 @@ Moderators open the moderation panel with the **OpenModeration** key (unbound by
 - **Approve:** everyone sees it.
 - **Deny:** ships using it show the vanilla sail to everyone but its uploader, and it can't be shared again. Approving it later undoes this.
 - **Remove:** deletes it from the server and frees the uploader's slot; it may be shared again.
+
+The panel also flags an upload whose file held more than image data (**unexpected content**), and notes when the uploader's game converted it differently from the server (usually a Windows and Linux difference, harmless).
 
 Uploaders only see a texture's status, never which moderator decided.
 
@@ -118,7 +124,7 @@ If one of these keybindings is also bound to a game action, a warning is written
 ## Technical Details
 
 - Custom data is stored in ZDO keys: `custom_ship_name`, `custom_sail_style`, `shipwrightstouch.sail_color`, `shipwrightstouch.sail_texture`, `shipwrightstouch.builder_id`, and `shipwrightstouch.builder_name`.
-- A ship stores only its texture's hash (SHA-256); the image itself travels from the server on demand.
+- A ship stores only its texture's hash (SHA-256); the image itself travels from the server on demand, always as a PNG the server wrote itself. The server remembers every hash that stands for the same picture (the original file, its converted copy), so ships keep working whichever one they hold.
 
 ## License & Development
 

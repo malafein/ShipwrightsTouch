@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0] - 2026-10-06
+
+Safer texture sharing: only clean pictures ever reach other players. Update the mod on your server and for every player at the same time; 1.2 and 1.3 can't share textures with each other.
+
+### New
+- **Clean shared images:** A texture is converted to a plain PNG before it's shared, by your game and again by the server, and players only ever receive the server's copy. Nothing but the picture leaves your computer or reaches anyone else's: no camera location, no editor metadata, no hidden data.
+- **JPG sharing:** JPG images can now be shared too.
+- **Moderation flags:** The moderation panel flags an upload whose file held more than image data. Servers can deny those automatically with the new `AutoDenyUnexpectedContent` setting (off by default); the uploader sees it as auto-denied and can ask a moderator to review it.
+- **Transfer speed limit:** The new `MaxTransferKBPerSecond` setting can slow texture transfers down to leave more room for world updates. Off by default.
+
+### Changes
+- **Size limit counts the converted PNG:** A converted image is often larger than the original file (about 1.5× for typical artwork), so the default `MaxTextureFileKB` is now 2048. Servers set up with 1.2 keep their value until changed. The panel shows the converted size when a texture is over the limit.
+- **Upgrading a server:** On first start, textures already shared are converted; the originals are kept in `uploads/pre-1.3.0`, and ships keep their sails.
+
+### Fixes
+- **Stalled uploads:** If an upload stops arriving, the server now says so right away, instead of the player waiting for a timeout.
+
 ## [1.2.1] - 2026-10-05
 
 ### Fixes
