@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.0] - Unreleased
+
+### Fixed
+- **Name box after rejoining:** The customization panel no longer loses its name box, color code box and texture list scrollbar after you log out and join a world again in the same game session.
+
 ## [1.3.0] - 2026-10-06
 
 Safer texture sharing: only clean pictures ever reach other players. Update the mod on your server and for every player at the same time; 1.2 and 1.3 can't share textures with each other.
