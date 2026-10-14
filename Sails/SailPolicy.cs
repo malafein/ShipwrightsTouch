@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using BepInEx.Configuration;
 
 namespace malafein.Valheim.ShipwrightsTouch
 {
-    // What a server allows for custom sail textures. The server's own config is the source; clients
-    // receive a copy in the handshake (SailNetwork) and never use their local values for this.
+    // What a server allows: custom sail textures, Safe Harbor (enemies ignoring unoccupied ships,
+    // rescuing capsized ships) and whether players need this mod. The server's own config is the
+    // source; clients receive a copy in the handshake (SailNetwork) and never use their local values
+    // for this.
     public class SailPolicy
     {
         private const string Section = "Server";
@@ -17,6 +20,9 @@ namespace malafein.Valheim.ShipwrightsTouch
         public static ConfigEntry<int> MaxDimensionConfig;
         public static ConfigEntry<int> MaxTexturesPerPlayerConfig;
         public static ConfigEntry<bool> AutoDenyUnexpectedContentConfig;
+        public static ConfigEntry<bool> RequireMatchingModConfig;
+        public static ConfigEntry<bool> EnemiesIgnoreUnoccupiedShipsConfig;
+        public static ConfigEntry<bool> RescueCapsizedShipsConfig;
 
         public bool AllowCustomTextures;
         public bool AllowPlayerTextures;
@@ -25,8 +31,16 @@ namespace malafein.Valheim.ShipwrightsTouch
         public int MaxDimension;
         public int MaxTexturesPerPlayer;
         public bool AutoDenyUnexpectedContent;
+        public bool RequireMatchingMod;
+        public bool EnemiesIgnoreUnoccupiedShips;
+        public bool RescueCapsizedShips;
+
+        // The Safe Harbor settings run on players' games (whoever runs the monster or the ship), so
+        // they only hold when every player has the mod.
+        public bool NeedsMatchingMod => EnemiesIgnoreUnoccupiedShips || RescueCapsizedShips;
 
         // Singleplayer: nothing is shared, so nothing is restricted beyond the local folder's limits.
+        // Safe Harbor comes from the local config there (SailNetwork.EnemiesIgnoreUnoccupiedShips).
         public static readonly SailPolicy Unrestricted = new SailPolicy
         {
             AllowCustomTextures = true,
@@ -38,9 +52,11 @@ namespace malafein.Valheim.ShipwrightsTouch
             AutoDenyUnexpectedContent = false
         };
 
-        // One tag shared by all the entries, so they lock and unlock together in Configuration
-        // Manager (which reads ReadOnly from any tag class with this name).
-        private static readonly ConfigurationManagerAttributes s_attributes = new ConfigurationManagerAttributes();
+        // Each entry's tag for Configuration Manager (which reads any tag class with this name): an
+        // Order, so the section lists them in the order they're bound here (sail textures, then the
+        // mod requirement and Safe Harbor) instead of alphabetically, and ReadOnly, set on all of
+        // them together.
+        private static readonly List<ConfigurationManagerAttributes> s_attributes = new List<ConfigurationManagerAttributes>();
 
         public static ConfigEntryBase[] Entries { get; private set; }
 
@@ -62,6 +78,12 @@ namespace malafein.Valheim.ShipwrightsTouch
                 Describe("How many textures each player may share (at least 1)."));
             AutoDenyUnexpectedContentConfig = config.Bind(Section, "AutoDenyUnexpectedContent", false,
                 Describe("Automatically deny an upload that held more than image data (moderators see it flagged as \"unexpected content\" either way). The game never sends such files itself, so it means a modified game or a hand-made file. Players are only ever sent the server's own clean copy, so this is about keeping such uploads off ships, not about safety. The uploader sees it as auto-denied, and a moderator can still approve it."));
+            RequireMatchingModConfig = config.Bind(Section, "RequireMatchingMod", false,
+                Describe("Only let players join who have a version of Shipwright's Touch this server can talk to. Others are turned away with the game's \"incompatible version\" message; players already connected without it get a 10 second warning, then are disconnected (their character is saved). Turned on automatically by EnemiesIgnoreUnoccupiedShips and RescueCapsizedShips, and stays on if those are turned off again."));
+            EnemiesIgnoreUnoccupiedShipsConfig = config.Bind(Section, "EnemiesIgnoreUnoccupiedShips", false,
+                Describe("Safe Harbor: monsters don't go after a ship with nobody aboard. One already attacking keeps at it until you come back and deal with it, and a ship next to a fight can still be hit. Players' games run the monsters, so this turns RequireMatchingMod on."));
+            RescueCapsizedShipsConfig = config.Bind(Section, "RescueCapsizedShips", false,
+                Describe("Safe Harbor: a capsized ship still takes damage, but never below 10% of its health, and anyone can turn it upright by holding the interact key on it. Players' games run the ships, so this turns RequireMatchingMod on."));
 
             Entries = new ConfigEntryBase[]
             {
@@ -71,17 +93,26 @@ namespace malafein.Valheim.ShipwrightsTouch
                 MaxFileKilobytesConfig,
                 MaxDimensionConfig,
                 MaxTexturesPerPlayerConfig,
-                AutoDenyUnexpectedContentConfig
+                AutoDenyUnexpectedContentConfig,
+                RequireMatchingModConfig,
+                EnemiesIgnoreUnoccupiedShipsConfig,
+                RescueCapsizedShipsConfig
             };
         }
 
         private static ConfigDescription Describe(string text, AcceptableValueBase range = null)
         {
-            return new ConfigDescription(text + SectionNote, range, s_attributes);
+            // Higher Order shows first.
+            var attributes = new ConfigurationManagerAttributes { Order = -s_attributes.Count };
+            s_attributes.Add(attributes);
+            return new ConfigDescription(text + SectionNote, range, attributes);
         }
 
         // Greys the settings out in Configuration Manager (it rereads tags when its window opens).
-        public static void SetReadOnly(bool readOnly) => s_attributes.ReadOnly = readOnly;
+        public static void SetReadOnly(bool readOnly)
+        {
+            foreach (ConfigurationManagerAttributes attributes in s_attributes) attributes.ReadOnly = readOnly;
+        }
 
         // Writes a policy into the local config entries (saving the config file).
         public void ApplyToConfig()
@@ -93,6 +124,9 @@ namespace malafein.Valheim.ShipwrightsTouch
             MaxDimensionConfig.Value = MaxDimension;
             MaxTexturesPerPlayerConfig.Value = MaxTexturesPerPlayer;
             AutoDenyUnexpectedContentConfig.Value = AutoDenyUnexpectedContent;
+            RequireMatchingModConfig.Value = RequireMatchingMod;
+            EnemiesIgnoreUnoccupiedShipsConfig.Value = EnemiesIgnoreUnoccupiedShips;
+            RescueCapsizedShipsConfig.Value = RescueCapsizedShips;
         }
 
         public static SailPolicy FromConfig()
@@ -105,7 +139,10 @@ namespace malafein.Valheim.ShipwrightsTouch
                 MaxFileKilobytes = MaxFileKilobytesConfig.Value,
                 MaxDimension = MaxDimensionConfig.Value,
                 MaxTexturesPerPlayer = Math.Max(1, MaxTexturesPerPlayerConfig.Value),
-                AutoDenyUnexpectedContent = AutoDenyUnexpectedContentConfig.Value
+                AutoDenyUnexpectedContent = AutoDenyUnexpectedContentConfig.Value,
+                RequireMatchingMod = RequireMatchingModConfig.Value,
+                EnemiesIgnoreUnoccupiedShips = EnemiesIgnoreUnoccupiedShipsConfig.Value,
+                RescueCapsizedShips = RescueCapsizedShipsConfig.Value
             };
         }
 
@@ -118,6 +155,9 @@ namespace malafein.Valheim.ShipwrightsTouch
             package.Write(MaxDimension);
             package.Write(MaxTexturesPerPlayer);
             package.Write(AutoDenyUnexpectedContent);
+            package.Write(RequireMatchingMod);
+            package.Write(EnemiesIgnoreUnoccupiedShips);
+            package.Write(RescueCapsizedShips);
         }
 
         public static SailPolicy Read(ZPackage package)
@@ -130,14 +170,18 @@ namespace malafein.Valheim.ShipwrightsTouch
                 MaxFileKilobytes = package.ReadInt(),
                 MaxDimension = package.ReadInt(),
                 MaxTexturesPerPlayer = package.ReadInt(),
-                AutoDenyUnexpectedContent = package.ReadBool()
+                AutoDenyUnexpectedContent = package.ReadBool(),
+                RequireMatchingMod = package.ReadBool(),
+                EnemiesIgnoreUnoccupiedShips = package.ReadBool(),
+                RescueCapsizedShips = package.ReadBool()
             };
         }
 
         public override string ToString()
         {
             return $"custom={AllowCustomTextures} player={AllowPlayerTextures} approval={RequireApproval} " +
-                   $"maxKB={MaxFileKilobytes} maxSize={MaxDimension} perPlayer={MaxTexturesPerPlayer} autoDeny={AutoDenyUnexpectedContent}";
+                   $"maxKB={MaxFileKilobytes} maxSize={MaxDimension} perPlayer={MaxTexturesPerPlayer} autoDeny={AutoDenyUnexpectedContent} " +
+                   $"requireMod={RequireMatchingMod} enemiesIgnore={EnemiesIgnoreUnoccupiedShips} rescueCapsized={RescueCapsizedShips}";
         }
     }
 
@@ -145,5 +189,6 @@ namespace malafein.Valheim.ShipwrightsTouch
     internal class ConfigurationManagerAttributes
     {
         public bool? ReadOnly;
+        public int? Order;
     }
 }

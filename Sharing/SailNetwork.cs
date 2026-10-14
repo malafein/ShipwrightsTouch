@@ -38,9 +38,10 @@ namespace malafein.Valheim.ShipwrightsTouch
     public static class SailNetwork
     {
         // Client and server must match exactly. 1 is the first released protocol (1.2.x), 2 is
-        // 1.3.0 (uploads converted before sending, aliases, upload flags); bump it only when a
-        // message changes after a release (unreleased builds are always deployed together).
-        public const int ProtocolVersion = 2;
+        // 1.3.0 (uploads converted before sending, aliases, upload flags), 3 is 1.4.0 (Safe Harbor
+        // and RequireMatchingMod in the policy, early version check in ModRequirement); bump it
+        // only when a message changes after a release (unreleased builds are always deployed together).
+        public const int ProtocolVersion = 3;
 
         private const string HelloRpc = "ShipwrightsTouch_Hello";
         private const string PolicyRpc = "ShipwrightsTouch_Policy";
@@ -89,6 +90,16 @@ namespace malafein.Valheim.ShipwrightsTouch
         // server). Moderation is checked with ServerRoles.Has(ServerRoles.Moderate).
         public static bool CanChangeSettings => ServerRoles.Has(ServerRoles.ChangeSettings);
 
+        // Safe Harbor settings in effect: the local config when this game is the server (or
+        // singleplayer), the server's on a modded server, off on any other server.
+        public static bool EnemiesIgnoreUnoccupiedShips => Mode == ServerMode.Local
+            ? SailPolicy.EnemiesIgnoreUnoccupiedShipsConfig.Value
+            : Mode == ServerMode.Modded && Policy.EnemiesIgnoreUnoccupiedShips;
+
+        public static bool RescueCapsizedShips => Mode == ServerMode.Local
+            ? SailPolicy.RescueCapsizedShipsConfig.Value
+            : Mode == ServerMode.Modded && Policy.RescueCapsizedShips;
+
         // Raised on the main thread whenever Mode, Policy or this player's permissions may have changed.
         public static event Action Changed;
 
@@ -129,6 +140,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (net.IsServer())
             {
                 Mode = ServerMode.Local;
+                ApplyImpliedRequirement();
                 Policy = ZNet.IsSinglePlayer ? SailPolicy.Unrestricted : SailPolicy.FromConfig();
                 SailServer.StartSession(net);
             }
@@ -151,7 +163,10 @@ namespace malafein.Valheim.ShipwrightsTouch
             if (net == null) return;
 
             if (net.IsServer())
+            {
+                ApplyImpliedRequirement();
                 SendPolicyToAll();
+            }
             else if (Mode == ServerMode.Modded)
                 RequestPolicyChange();
         }
@@ -192,7 +207,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             MirrorServerValues();
 
             if (firstAnswer) Log.Info($"The server runs {Plugin.ModName}; its sail texture settings apply.");
-            Log.Debug($"Server sail policy: {Policy} settings={CanChangeSettings} moderate={ServerRoles.Has(ServerRoles.Moderate)}");
+            Log.Debug($"Server policy: {Policy} settings={CanChangeSettings} moderate={ServerRoles.Has(ServerRoles.Moderate)}");
             Changed?.Invoke();
         }
 
@@ -227,13 +242,13 @@ namespace malafein.Valheim.ShipwrightsTouch
                 // Configuration Manager shows them read-only, but the file or another tool can still
                 // change them. The server would refuse anyway; snap back without asking it.
                 MirrorServerValues();
-                MessageHud.instance?.ShowMessage(MessageHud.MessageType.Center, "Only server admins can change the server's sail settings.");
+                MessageHud.instance?.ShowMessage(MessageHud.MessageType.Center, $"Only server admins can change the server's {Plugin.ModName} settings.");
                 return;
             }
 
             var package = new ZPackage();
             SailPolicy.FromConfig().Write(package);
-            Log.Debug("Sending a server sail setting change to the server.");
+            Log.Debug("Sending a server setting change to the server.");
             ZRoutedRpc.instance.InvokeRoutedRPC(ZNet.instance.GetServerPeer().m_uid, SetPolicyRpc, package);
         }
 
@@ -266,6 +281,23 @@ namespace malafein.Valheim.ShipwrightsTouch
         }
 
         // ── Server ───────────────────────────────────────────────────────
+
+        // Safe Harbor runs on players' games, so turning it on turns RequireMatchingMod on. Nothing
+        // turns it off again: the owner does that on purpose.
+        private static void ApplyImpliedRequirement()
+        {
+            if (!SailPolicy.FromConfig().NeedsMatchingMod || SailPolicy.RequireMatchingModConfig.Value) return;
+            Log.Info($"Safe Harbor needs every player to have {Plugin.ModName}: {nameof(SailPolicy.RequireMatchingMod)} turned on too.");
+            s_writingConfig = true;
+            try
+            {
+                SailPolicy.RequireMatchingModConfig.Value = true;
+            }
+            finally
+            {
+                s_writingConfig = false;
+            }
+        }
 
         private static void RPC_Hello(long sender, int clientProtocol)
         {
@@ -301,15 +333,20 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             if (!ServerRoles.PeerHas(sender, ServerRoles.ChangeSettings))
             {
-                Log.Info($"Refused a server sail setting change from {ServerRoles.PeerName(sender)}: not an admin.");
+                Log.Info($"Refused a server setting change from {ServerRoles.PeerName(sender)}: not an admin.");
                 SendPolicy(sender);
                 return;
             }
 
             SailPolicy requested = SailPolicy.Read(package);
             requested.MaxTexturesPerPlayer = Math.Max(1, requested.MaxTexturesPerPlayer);
-            Log.Info($"{ServerRoles.PeerName(sender)} changed the server sail settings.");
-            Log.Debug($"New server sail policy: {requested}");
+            if (requested.NeedsMatchingMod && !requested.RequireMatchingMod)
+            {
+                requested.RequireMatchingMod = true;
+                Log.Info($"Safe Harbor needs every player to have {Plugin.ModName}: {nameof(SailPolicy.RequireMatchingMod)} turned on too.");
+            }
+            Log.Info($"{ServerRoles.PeerName(sender)} changed the server settings.");
+            Log.Debug($"New server policy: {requested}");
 
             // Saves the config file; range limits clamp out-of-range values. Then one broadcast
             // for all the values, the sender included.
@@ -324,6 +361,7 @@ namespace malafein.Valheim.ShipwrightsTouch
 
             Policy = SailPolicy.FromConfig();
             foreach (long peer in s_moddedPeers) SendPolicy(peer);
+            ModRequirement.PolicyChanged();
 
             // What each peer may see depends on the policy.
             SailServer.SendCatalogToAll();

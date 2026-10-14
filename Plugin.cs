@@ -95,6 +95,9 @@ namespace malafein.Valheim.ShipwrightsTouch
 
 
             SailPolicy.Bind(Config);
+#if DEBUG
+            ModRequirement.BindDebug(Config);
+#endif
             SailNetwork.Init(Config);
             SailTextures.Refresh();
 

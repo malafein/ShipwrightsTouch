@@ -81,9 +81,10 @@ namespace malafein.Valheim.ShipwrightsTouch
 #if DEBUG
         // Test aid: gives the ship under the cursor a made-up owner, to test what other players'
         // ships allow (e.g. moderating from a ship). Debug builds only; pressing it again on the
-        // same ship gives it back to the local player. F8: vanilla uses F9 (controller layout), and
-        // with a modifier KDE takes Ctrl+F9 (window overview) and the game misses the Ctrl release.
-        private static readonly KeyboardShortcut DebugFakeOwnerKey = new KeyboardShortcut(KeyCode.F8);
+        // same ship gives it back to the local player. F6: vanilla uses F9 (controller layout), with
+        // a modifier KDE takes Ctrl+F9 (window overview) and the game misses the Ctrl release, and F8
+        // opens the Ratatoskr test panel.
+        private static readonly KeyboardShortcut DebugFakeOwnerKey = new KeyboardShortcut(KeyCode.F6);
         private const long DebugFakeOwnerId = 1L;
 
         [HarmonyPatch(typeof(Player), "Update")]

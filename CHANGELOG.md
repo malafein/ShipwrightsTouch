@@ -1,9 +1,19 @@
 # Changelog
 
-## [1.4.0] - Unreleased
+## [1.4.0] - 2026-10-14
+
+Safe Harbor: servers can now keep unattended ships safe from monsters and rescue capsized ones. Update the mod on your server and for every player at the same time; 1.3 and 1.4 can't share textures with each other.
+
+### New
+- **Safe Harbor:** Two server options, off by default. **EnemiesIgnoreUnoccupiedShips:** monsters don't go after a ship with nobody aboard (one already attacking keeps at it until you deal with it). **RescueCapsizedShips:** a capsized ship stops taking damage at 10% of its health, and holding your interact key on its hull turns it upright.
+- **RequireMatchingMod:** A server option that only lets players join with a matching version of the mod. Players already connected without it get a 10 second countdown, then are disconnected with their character saved. The Safe Harbor options turn it on, since they only work when every player has the mod.
 
 ### Fixed
+- **Hover text on the hull:** Looking at a ship's hull showed nothing; it now shows the ship's name, builder and prompts, like the rudder and the rest of the ship.
 - **Name box after rejoining:** The customization panel no longer loses its name box, color code box and texture list scrollbar after you log out and join a world again in the same game session.
+
+### Changed
+- The server settings are listed in a fixed order in Configuration Manager: sail textures first, then the mod requirement and Safe Harbor.
 
 ## [1.3.0] - 2026-10-06
 

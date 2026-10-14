@@ -41,7 +41,7 @@ namespace malafein.Valheim.ShipwrightsTouch
             ApplyNamingHover(__instance, ref __result);
         }
 
-        private static void ApplyNamingHover(Component instance, ref string result)
+        internal static void ApplyNamingHover(Component instance, ref string result)
         {
             Ship ship = NamingPatches.GetParentShip(instance);
             if (ship == null) return;

@@ -1,6 +1,6 @@
 # Shipwright's Touch
 
-A Valheim mod that lets you name your ships, color their sails any color, and put your own images on them, shared with everyone on your server.
+A Valheim mod that lets you name your ships, color their sails any color, and put your own images on them, shared with everyone on your server. Servers can also offer **Safe Harbor**: monsters leave unattended ships alone, and a capsized ship can be turned upright before it's lost.
 
 ![A longship under a chequered sail](https://raw.githubusercontent.com/malafein/ShipwrightsTouch/main/Assets/Screenshots/hero.jpg)
 
@@ -11,7 +11,8 @@ A Valheim mod that lets you name your ships, color their sails any color, and pu
 - **Custom Sail Textures:** Four historically inspired Viking Age sails are included, and you can add your own PNG or JPG images and choose them in the panel. The sail color tints the image; pick white to show it as-is.
 - **Sharing on Servers:** On a server with this mod, a texture you put on a ship is shared with the server the first time you use it, so everyone sees it. Only a clean PNG copy of the picture is ever shared. Server owners decide whether players may share, set limits, and can require a moderator's approval first.
 - **Moderation:** Server admins, and moderators they choose, review shared textures in an in-game panel: approve, deny, or remove them.
-- **Dynamic Hover Text:** The ship's name is displayed in yellow at the top of the hover text for all ship parts, including storage containers.
+- **Safe Harbor (server options):** Monsters stop picking on ships nobody is aboard, and a capsized ship no longer breaks apart on its own: hold your interact key on the hull to turn it upright. See Safe Harbor below.
+- **Dynamic Hover Text:** The ship's name is displayed in yellow at the top of the hover text for all ship parts, including the hull and storage containers.
 - **Builder Identity & Restrictions:** When a ship is constructed, the builder is recorded as its owner. Only the owner can customize or deconstruct it; a ship made public can be customized by anyone. The owner's name is displayed in the hover text.
 - **Configurable Keybindings:** Every keybinding can be changed in the config, and the hover text always shows the keys you have set.
 - **Mod Compatibility:** Designed to work alongside popular mods like `QuickStackStore`. Interaction prompts are disabled on containers to ensure no conflict with storage-specific features.
@@ -69,11 +70,20 @@ Each texture's status shows in the panel's list: **shared** (everyone sees it), 
 - **ShowOtherPlayersTextures:** Set to `false` to show other players' textures as the vanilla sail. The server's own textures still show.
 - **MaxTransferKBPerSecond:** A speed limit for sending textures, in KB per second: yours when you share one, the server's when it sends textures to players. `0` (the default) sends as fast as the connection allows. The game already limits each connection to 150 KB/s, shared with world updates, so a limit only slows transfers down to leave the world more room. Choices: `0`, `8`, `16`, `32`, `64` or `128`; any other value counts as `0`.
 
+## Safe Harbor
+
+Come back from foraging and the Greydwarves have chewed through your karve at the dock; or a wave rolls your ship over and it slowly breaks apart while you watch. Safe Harbor is two server options against that. Both are off by default; a server owner turns them on in the `[Server]` settings (in single player, your own settings apply).
+
+- **EnemiesIgnoreUnoccupiedShips:** Monsters don't go after a ship with nobody aboard. It's not a shield: a monster that's already attacking keeps at it after you step off, until you come back and deal with it, and a ship next to a fight can still take a stray hit.
+- **RescueCapsizedShips:** A capsized ship still takes damage, so there's reason to hurry, but never below 10% of its health. Hold your interact key (`E` by default) on its hull for two seconds and it turns upright. Anyone can do it.
+
+Monsters and ships are run by the game of a player nearby, not by the server, so both options only hold if every player has the mod. Turning either one on also turns on **RequireMatchingMod** (see below), and it stays on if you later turn them off again.
+
 ## Server Setup
 
 A server's own textures go in its `BepInEx/config/ShipwrightsTouch/sails` folder; every player sees them, no approval needed. The server sends players converted copies, kept in `BepInEx/config/ShipwrightsTouch/server-sails`; your files are never changed. Textures shared by players are kept, converted, in `BepInEx/config/ShipwrightsTouch/uploads`.
 
-The server and its players need the same version of the mod to share textures: with a mismatch, players get a notice and their textures show only for them. **Upgrading from 1.2:** on first start the server converts the textures players already shared and keeps the originals and the old index in `uploads/pre-1.3.0`. Ships keep their sails.
+The server and its players need the same version of the mod to share textures: with a mismatch, players get a notice and their textures show only for them. 1.4 can't share with 1.3 or older, so update the server and every player together. **Upgrading from 1.2:** on first start the server converts the textures players already shared and keeps the originals and the old index in `uploads/pre-1.3.0`. Ships keep their sails.
 
 The `[Server]` settings apply when your game is the server (a dedicated server, or you hosting). While connected to a server with this mod, they show the server's values, and its admins can change them live from Configuration Manager.
 
@@ -84,6 +94,8 @@ The `[Server]` settings apply when your game is the server (a dedicated server, 
 - **MaxTextureSize:** Largest width or height a player may share, in pixels. Default `1024`.
 - **MaxTexturesPerPlayer:** How many textures each player may share, denied ones included (a moderator's Remove frees a slot). Default `10`.
 - **AutoDenyUnexpectedContent:** Set to `true` to deny an upload automatically when the file held more than image data. The game never sends such files itself, so one comes from a modified game or was made by hand. Players only ever get the server's clean copy either way. Off by default; a moderator can approve an auto-denied texture.
+- **RequireMatchingMod:** Set to `true` to only let players join who have a version of Shipwright's Touch the server can talk to. Others get the game's "Incompatible version" message (with the mod installed, it also says Shipwright's Touch is required). If you turn it on while such players are connected, they see a 10 second countdown and are then disconnected; their character is saved. Off by default, but turned on by the Safe Harbor options.
+- **EnemiesIgnoreUnoccupiedShips** and **RescueCapsizedShips:** see Safe Harbor above. Off by default.
 
 ### Moderation
 
